@@ -1,0 +1,493 @@
+---
+title: "Tidyverse - data wrangling"
+author: "Advanced R"
+date: "Thursday May 4, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message=FALSE, warning=FALSE)
+```
+
+
+## Learning goals
+
+1. Make data suitable to use with tools in R
+
+2. Efficient data manipulation and transformation
+
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+load("data/adv-R-twin2.RData")
+# load("data/adv-R-twin.RData")
+```
+
+
+## Example datasets
+
+Liu et al., Quantitative variability of 342 plasma proteins in a human twin population, *Molecular Systems Biology*, 2015. [PMID: 25652787]
+
+* 232 plasma samples
+    - 58 pairs of monozygotic (MZ) and dizygotic (DZ) twins
+    - 2 time points
+    - $58 \times 2 \times 2 = 232$
+
+* Data acquired with MS workflows of
+    - Data independent acquisition (DIA)
+    - Selected reaction monitoring (SRM)
+
+* Subset of the original dataset (with `r length(unique(twin_dia$protein))` proteins by DIA and `r length(unique(twin_srm$protein))` proteins by SRM)
+
+```{r}
+str(twin_dia)
+```
+
+The two data frames have the same format, containing 6 columns
+
+* `protein` (factor): name of protein
+* `feature` (factor): combination of peptide, precursor charge state, fragment ion, and product charge state, separated by `_`
+* `pair` (integer): pair index (1-58)
+* `sample` (factor): combination of subject index (001-116), zygosity (MZ or DZ), and time (1 or 2), separated by `_`
+* `intensity_l` (numeric): integrated feature intensity from light (L) channel
+* `intensity_h` (numeric): integrated feature intensity from heavy (H, aka reference) channel
+
+
+```{r}
+head(twin_dia)
+head(twin_srm)
+```
+
+
+
+## Tasks
+
+**Task 1:** normalization of feature intensities, in a way that the median intensity of each run in heavy channel is identical (constant normalization)
+
+**Task 2:** comparison between DIA and SRM datasets, to evaluate agreement of protein quantification
+
+
+## Approaches
+
+We will discuss tools to 
+
+* **tidy data**
+
+* carry out **split-apply-combine approach**
+
+    - split dataset into subsets (e.g., feature intensities in heavy run of the first run)
+    
+    - apply operation (e.g., compute median value)
+    
+    - combine the medians from all runs
+
+* **join data**
+
+
+## Helpful conventions for data wrangling
+
+* Local data frame `tbl_df()` creates a wrapper of data frame that displays nicely in the console
+
+* `View()` calls the data viewer in RStudio
+
+* The **pipe operator** `%>%` to chain multiple operations 
+
+The RStudio keyboard shortcut: Ctrl + Shift + M (Windows), Cmd + Shift + M (Mac)
+
+*[TODO]: more about the pipe operator*
+
+
+```{r}
+twin_dia <- tbl_df(twin_dia)
+twin_srm <- tbl_df(twin_srm)
+```
+
+
+## Tidy data
+
+In a tidy dataset:
+
+* Each **variable** is saved in its own **column**
+
+* Each **observation** is saved in its own **row**
+
+* Each type of observational unit is stored in a single table
+
+Why tidy data? Tidy data complements R's **vectorized operations**. It is easy to access variables in a tidy dataset, and R will automatically preserve observations as you manipulate variables. 
+
+
+## tidyr
+
+A package (part of tidyverse) that reshapes the layout of datasets
+
+* Make observations from variables with `tidyr::gather()`
+
+* Make variables from observations with `tidyr::spread()`
+
+* Split and merge columns with `tidyr::unite()` and `tidyr::separate()`
+
+
+### Use `gather()` to make observations from variables
+
+*[TODO]: include a wide format dataset*
+
+Collapse multiple columns into two columns:
+
+1. a **key** column that contains the former column names
+
+2. a **value** column that contains the former column cells
+
+```{r}
+twin_dia %>% gather(label, intensity, 5:6)
+```
+
+
+### Use `spread()` to make variables from observations
+
+Generate multiple columns from two columns:
+
+1. each unique value in the **key** column becomes a column name
+
+2. each value in the **value** column becomes a cell in the new columns
+
+```{r}
+# twin_dia %>% spread(label, intensity)
+```
+
+
+### Use `separate()` to split a column by a character string separator
+
+```{r}
+twin_dia %>%
+    separate(col = feature, into = c("peptide", "z1", "fragment", "z3"), sep = "_")
+```
+
+
+### Use `unite()` to merge columns into a single column
+
+```{r}
+twin_dia %>% 
+    unite(col = fullannot, pair, sample, sep = "__")
+```
+
+
+### tidy datasets for later use
+
+```{r}
+td_srm <- twin_srm
+td_dia <- twin_dia
+```
+
+
+## dplyr
+
+A package that helps transform tabular data 
+
+**Reshape a dataset** (without changing its content)
+
+* Rename the columns of a data frame with `dplyr::rename()`
+
+* Order rows by values of a column with `dplyr::arrange()`
+
+**Data manipulation and transformation**
+
+* Extract existing variables with `dplyr::select()`
+
+* Extract existing observations with `dplyr::filter()`
+
+* Derive new variables with `dplyr::mutate()`
+
+* Make grouped summaries with `dplyr::summarise()` and `dplyr::group_by()`
+
+**Combine datasets**
+
+* Mutating joins with `dplyr::left_join()`, `dplyr::right_join()`, `dplyr::inner_join()`, `dplyr::full_join()`
+
+* Filtering joins `dplyr::semi_join()`, `dplyr::anti_join()`
+
+
+### Use `rename()` to rename column
+
+```{r}
+# Rename column intensity_h as inty_H, intensity_l as inty_L
+td_dia %>% rename(inty_H = intensity_h, inty_L = intensity_l)
+```
+
+
+### Use `arrange()` to order rows 
+
+```{r}
+# Order rows by values of column intensity_h, from low to high
+td_dia %>% arrange(intensity_h)
+
+# Order rows by values of column intensity_h, from high to low
+td_dia %>% arrange(desc(intensity_h))
+```
+
+
+### Use `select()` to extract existing variables
+
+```{r}
+# Select columns protein and feature
+td_dia %>% select(protein, feature)
+
+# Exclude column pair
+td_dia %>% select(-pair)
+
+# Select from column feature to column intensity_h
+td_dia %>% select(feature:intensity_h)
+```
+
+
+### Use `filter()` extract existing observations
+
+```{r}
+td_dia %>% filter(!is.na(intensity_h))
+
+# Comma as AND operation
+td_dia %>% filter(!is.na(intensity_h), !is.na(intensity_l))
+```
+
+```{r, eval=FALSE}
+# Same as 
+td_dia %>% filter(!(is.na(intensity_h) | is.na(intensity_l)))
+```
+
+```{r}
+# Keep observations from DZ, 2nd visit
+td_dia %>% filter(grepl("DZ_2", sample))
+```
+
+
+### Use `mutate()` to make new variables
+
+`mutate()` uses **window functions**, functions that take a vector of values and return another vector of values
+
+```{r}
+# Log2 transformation
+td_dia %>% mutate(log2inty_h = log2(intensity_h))
+
+# Use the just generated variables
+td_dia %>% 
+    mutate(
+        log2inty_h = log2(intensity_h), 
+        log2inty_l = log2(intensity_l), 
+        log2inty_d = log2inty_l - log2inty_h
+    )
+```
+
+
+### Use `summarise()` and `group_by()` to make grouped summaries
+
+* `summarise()` changes the unit of analysis by using **summary functions**, functions that take a vector of values and return a single value
+
+* `group_by()` defines the unit of analysis
+
+```{r}
+# Compute mean, sd and median of values in column intensity_l
+td_dia %>% 
+    summarise(
+        Intensity_ave = mean(intensity_l, na.rm = TRUE), 
+        Intensity_sd = sd(intensity_l, na.rm = TRUE), 
+        Intensity_med = median(intensity_l, na.rm = TRUE)
+    )
+```
+
+```{r}
+# Compute mean, sd and median of values in column intensity_l, within each sample
+td_dia %>% 
+    group_by(sample) %>% 
+    summarise(
+        Intensity_ave = mean(intensity_l, na.rm = TRUE), 
+        Intensity_sd = sd(intensity_l, na.rm = TRUE), 
+        Intensity_med = median(intensity_l, na.rm = TRUE)
+    )
+```
+
+
+### Split-apply-combine approach
+
+Now we have tools ready to derive quantities for constant normalization
+
+```{r}
+# Equalizing medians
+td_dia %>% mutate(log2inty_h = log2(intensity_h)) %>% 
+    group_by(sample) %>% 
+    summarise(log2inty_med = median(log2inty_h, na.rm = TRUE)) %>% 
+    mutate(log2inty_adj = median(log2inty_med) - log2inty_med)
+```
+
+
+## Combine datasets
+
+Figures from [Grolemund and Wickham, *R for Data Science*] 
+
+
+```{r, out.width=300, echo=FALSE}
+knitr::include_graphics('fig/join-setup.png')
+```
+
+
+### Mutating joins
+
+```{r, out.width=600, echo=FALSE}
+knitr::include_graphics('fig/join-inner.png')
+```
+
+```{r, out.width=600, echo=FALSE}
+knitr::include_graphics('fig/join-outer.png')
+```
+
+
+### Filtering joins
+
+```{r, out.width=600, echo=FALSE}
+knitr::include_graphics('fig/join-semi.png')
+```
+
+```{r, out.width=600, echo=FALSE}
+knitr::include_graphics('fig/join-anti.png')
+```
+
+
+## Task 1: constant normalization
+
+
+### Split-apply-combine approach to derive the adjustment 
+
+Use `summarise()` with `group_by()` 
+
+```{r}
+td_dia <- td_dia %>% 
+    mutate(
+        log2inty_h = log2(intensity_h), 
+        log2inty_l = log2(intensity_l)
+    )
+
+td_dia_eq <- td_dia %>% 
+    group_by(sample) %>% 
+    summarise(log2inty_med = median(log2inty_h, na.rm = TRUE)) %>% 
+    mutate(log2inty_adj = median(log2inty_med) - log2inty_med)
+
+td_dia_eq
+```
+
+
+### Merge the derived quantities back to the original dataset
+
+```{r}
+left_join(td_dia, td_dia_eq)
+```
+
+```{r}
+td_dia2 <- left_join(td_dia, td_dia_eq) %>% 
+    mutate(
+        log2inty_h_cn = log2inty_h + log2inty_adj, 
+        log2inty_l_cn = log2inty_l + log2inty_adj
+    )
+```
+
+
+### Visualize the result
+
+Boxplot of feature log-intensities in each run, before normalization
+
+```{r, fig.width=6, fig.height=4, warning=FALSE, message=FALSE}
+library(stringr)
+td_dia2 %>% filter(str_detect(sample, str_c(str_pad(1:10, 3, pad = "0"), collapse = "|"))) %>% 
+    ggplot(aes(sample, log2inty_h)) + 
+    geom_boxplot() + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Boxplot of feature log-intensities in each run, after normalization
+
+```{r, fig.width=6, fig.height=4, warning=FALSE, message=FALSE}
+td_dia2 %>% filter(str_detect(sample, str_c(str_pad(1:10, 3, pad = "0"), collapse = "|"))) %>% 
+    ggplot(aes(sample, log2inty_h_cn)) + 
+    geom_boxplot() + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+## Task 2: comparison between DIA and SRM datasets
+
+Evaluate the agreement of protein quantification between DIA and SRM
+
+* Quantification with each dataset (split-apply-combine)
+
+* Merge two datasets
+
+* Evaluate the agreement
+
+
+### protein quantification with each dataset
+
+Sum up all the feature intensities corresponding to a protein
+
+```{r}
+# Perform log of sum in the DIA dataset
+los_dia <- td_dia %>% group_by(sample, protein) %>% 
+    summarise(sum_dia = sum(intensity_l, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    mutate(logsum_dia = ifelse(sum_dia == 0, 0, log2(sum_dia)))
+los_dia
+```
+
+```{r}
+# Summarization for the SRM data
+los_srm <- td_srm %>% group_by(sample, protein) %>% 
+    summarise(sum_srm = sum(intensity_l, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    mutate(logsum_srm = ifelse(sum_srm == 0, 0, log2(sum_srm)))
+```
+
+
+### Merge two datasets
+
+```{r}
+# Merge results (with proteins quantified in both)
+los_all <- inner_join(los_dia, los_srm)
+```
+
+```{r}
+ggplot(los_all, aes(logsum_dia, logsum_srm)) + 
+    geom_point() + geom_smooth(se = FALSE, method = "lm")
+
+ggplot(los_all, aes(logsum_dia, logsum_srm)) + 
+    geom_point(aes(colour = protein))
+```
+
+
+### Evaluate the agreement
+
+Calculate correlation coefficient
+
+```{r}
+cor(los_all$logsum_dia, los_all$logsum_srm)
+```
+
+Calculate correlation per protein
+
+```{r}
+los_all %>% group_by(protein) %>% 
+    summarise(correlation = cor(logsum_dia, logsum_srm))
+```
+
+
+## Limit of the currently introduced tools
+
+`summarise()` with `group_by()` is a great tool to apply the split-apply-combine strategy with **summary functions**. To deal with more complicated outputs, however, more general tools are needed. 
+
+```{r}
+cor.test(los_all$logsum_dia, los_all$logsum_srm)
+```
+
+```{r, eval=F}
+# This would fail... 
+los_all %>% group_by(protein) %>% 
+    summarise(corres = cor.test(logsum_dia, logsum_srm))
+```
+
+We will discuss tools for more general split-apply-combine approaches
