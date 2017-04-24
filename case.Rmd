@@ -32,7 +32,7 @@ knitr::opts_chunk$set(message=FALSE, warning=FALSE)
 load("data/adv-R-twin2.RData")
 ```
 
-```{r, fig.width=8, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+```{r, fig.width=8, fig.height=5, echo=FALSE, fig.align='center', warning=FALSE, message=FALSE}
 library(tidyverse)
 library(stringr)
 sub <- tbl_df(twin_dia) %>% 
