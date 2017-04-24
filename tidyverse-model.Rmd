@@ -26,53 +26,59 @@ load("data/adv-R-twin2.RData")
 
 ## Task
 
-Model-based inference of protein abundance
+Model-based summary of feature log-intensities for all proteins in every run
+
+* Model the log-intensities of features for each protein considering feature and run as fixed effects
+
+* Run-level summarization with the fitted model
 
 
 ## Approaches
 
 We will discuss tools to perform modeling/testing in multiple groups through
 
-* Iterations
+* iterations
 
-* Nested data frame
+* use of nested data frame
 
 
-## Tidy data & normalization
+## Normalization
 
-Same as in the previous session.
+Same as in the previous session
 
 ```{r}
-td_dia <- tbl_df(twin_dia) %>% 
+twin_dia <- tbl_df(twin_dia) %>% 
     mutate(
         log2inty_h = log2(intensity_h), 
         log2inty_l = log2(intensity_l)
     )
 
-td_dia_eq <- td_dia %>% 
+med_dia <- twin_dia %>% 
     group_by(sample) %>% 
     summarise(log2inty_med = median(log2inty_h, na.rm = TRUE)) %>% 
     mutate(log2inty_adj = median(log2inty_med) - log2inty_med)
 
-td_dia2 <- left_join(td_dia, td_dia_eq) %>% 
+twin_dia2 <- left_join(twin_dia, med_dia) %>% 
     mutate(
         log2inty_h_cn = log2inty_h + log2inty_adj, 
         log2inty_l_cn = log2inty_l + log2inty_adj
     )
 
-td_dia2
+twin_dia2
 ```
 
 
 ## Use linear model to summarize feature log-intensities of a protein
 
+*[TODO]: add a smaller example (e.g., with 3 runs, 4 features)...*
+
 Model feature log-intensities with fixed effects of run and feature
 
 ```{r}
 # One protein (A1AG_BOVINE)
-a1ag <- td_dia2 %>% filter(protein == "A1AG_BOVINE")
+a1ag <- twin_dia2 %>% filter(protein == "A1AG_BOVINE")
 
-# Linear model with fixed effects of sample and Features, no intercept
+# Linear model with fixed effects of sample and feature, no intercept
 fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = a1ag)
 ```
 
@@ -104,24 +110,24 @@ data_frame(effect = attr(fit_coef, "names"), estimate = unname(fit_coef)) %>%
 ## Summarize for all proteins with a `for()` loop
 
 
-### Approach 1a
+### Approach 1
 
 * Loop over proteins
 
 * Fit a linear model for each protein with `lm()`
 
-* Add new results to previous one in every iteration with `rbind()`
+* Add new results to previous ones in every iteration with `rbind()`
 
 ```{r}
 # Unique proteins in the dataset
-uniq_prot <- levels(td_dia2$protein)
+uniq_prot <- levels(twin_dia2$protein)
 
-# Approach 1a
+# Approach 1
 t_start <- proc.time()
 df_allprot <- NULL
 for (i in seq_along(uniq_prot)) {
     # Subset for one protein
-    oneprot <- td_dia2 %>% filter(protein == uniq_prot[i])
+    oneprot <- twin_dia2 %>% filter(protein == uniq_prot[i])
     # Fit linear model and extract estimates
     fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = oneprot)
     fit_coef <- coef(fit)
@@ -135,13 +141,13 @@ for (i in seq_along(uniq_prot)) {
     # Attach new result to those in previous iterations
     df_allprot <- rbind(df_allprot, df_oneprot)
 }
-t_1a <- proc.time() - t_start
+(t1 <- proc.time() - t_start)
 ```
 
 We should avoid this approach as it's not very efficient - in every iteration, R has to copy all the data from previous iterations.
 
 
-### Approach 1b
+### Approach 2
 
 * Loop over proteins
 
@@ -153,12 +159,12 @@ We should avoid this approach as it's not very efficient - in every iteration, R
 
 
 ```{r}
-# Approach 1b
+# Approach 2
 t_start <- proc.time()
 list_allprot <- vector("list", length = length(uniq_prot))
 for (i in seq_along(uniq_prot)) {
     # Subset for one protein
-    oneprot <- td_dia2 %>% filter(protein == uniq_prot[i])
+    oneprot <- twin_dia2 %>% filter(protein == uniq_prot[i])
     # Fit linear model and extract estimates
     fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = oneprot)
     fit_coef <- coef(fit)
@@ -171,12 +177,12 @@ for (i in seq_along(uniq_prot)) {
         filter(grepl("sample", effect))
 }
 df_allprot <- bind_rows(list_allprot)
-t_1b <- proc.time() - t_start
+(t2 <- proc.time() - t_start)
 ```
 
 The approaches discussed so far have two obvious drawbacks: 
 
-1. The output objects of models are not tidy - it requires additional efforts to reformat the objects
+1. The output objects of models are not tidy - it requires additional efforts to reformat the objects and extract summaries of our interest
 
 2. The fitted models are not saved - it requires re-fitting the models to extract additional (unplanned) summaries
 
@@ -213,7 +219,7 @@ glance(fit)
 ```
 
 
-### Approach 1c
+### Approach 3
 
 * Define the analysis unit with `dplyr::group_by()`
 
@@ -223,13 +229,13 @@ glance(fit)
 
 
 ```{r}
-# Approach 1c
+# Approach 3
 t_start <- proc.time()
-td_dia2 %>% 
+twin_dia2 %>% 
     group_by(protein) %>%
     do(tidy(lm(log2inty_l_cn ~ 0 + sample + feature, data = .))) %>% 
     filter(grepl("sample", term))
-t_1c <- proc.time() - t_start
+t3 <- proc.time() - t_start
 ```
 
 Note that multiple rows are generated within each model. 
@@ -238,17 +244,17 @@ Note that multiple rows are generated within each model.
 
 ```{r, eval=FALSE}
 # When input is not the first argument of a function
-f(y, x)
-x %>% f(y, .)
+FUN(Y, X)
+X %>% FUN(Y, .)
 
-f(y, z = x)
-x %>% f(y, z = .)
+FUN(Y, Z = X)
+X %>% FUN(Y, Z = .)
 ```
 
 It's also possible to save the fitted model for each protein, by saving the modeling output into a new column `fit`: 
 
 ```{r}
-fit_dia <- td_dia2 %>% 
+fit_dia <- twin_dia2 %>% 
     group_by(protein) %>% 
     do(fit = lm(log2inty_l_cn ~ 0 + sample + feature, data = .))
 fit_dia
@@ -270,7 +276,7 @@ Use `tidyr::nest()` to create nested data frame for more general approaches
 * New `data` column to store the stratified data, in a list (list-column)
 
 ```{r}
-nested_dia <- td_dia2 %>% 
+nested_dia <- twin_dia2 %>% 
     group_by(protein) %>% 
     nest()
 nested_dia
@@ -324,7 +330,7 @@ nested_dia %>% unnest(param)
 ```
 
 
-### Approach 1d
+### Approach 4
 
 * Created a nested data frame with `dplyr::group_by()` `tidyr::nest()`
 
@@ -335,11 +341,11 @@ nested_dia %>% unnest(param)
 * Transform back to the original form with `tidyr::unnest()`
 
 ```{r}
-# Approach 1d
+# Approach 4
 t_start <- proc.time()
 
 # Create nested data frame 
-nested_dia <- td_dia2 %>% 
+nested_dia <- twin_dia2 %>% 
     group_by(protein) %>% 
     nest()
 # Model and tidy output objects
@@ -351,11 +357,11 @@ nested_dia <- nested_dia %>%
 # Unnest data and additional manipulation
 nested_dia %>% unnest(param) %>% 
     filter(grepl("sample", term))
-t_1d <- proc.time() - t_start
+t4 <- proc.time() - t_start
 ```
 
-A major advantage of Approach 1d is that it creates a very rich structured dataset that can be further explored in a principled way.
+A major advantage of Approach 4 is that it creates a very rich structured dataset that can be further explored in a principled way.
 
 ```{r}
-rbind(t_1a, t_1b, t_1c, t_1d)
+rbind(t1, t2, t3, t4)
 ```
