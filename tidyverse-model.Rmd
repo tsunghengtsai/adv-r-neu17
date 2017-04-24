@@ -39,7 +39,7 @@ We will discuss tools to perform modeling/testing in multiple groups through
 
 * iterations
 
-* use of nested data frame
+* the use of nested data frame
 
 
 ## Normalization
@@ -70,39 +70,36 @@ twin_dia2
 
 ## Use linear model to summarize feature log-intensities of a protein
 
-*[TODO]: add a smaller example (e.g., with 3 runs, 4 features)...*
-
 Model feature log-intensities with fixed effects of run and feature
 
 ```{r}
-# One protein (A1AG_BOVINE)
-a1ag <- twin_dia2 %>% filter(protein == "A1AG_BOVINE")
+# One protein (AACT) measured in 3 runs (001_MZ_1, 002_MZ_1, 003_MZ_1)
+sub_dia <- twin_dia2 %>% 
+    filter(protein == "AACT", sample %in% c("001_MZ_1", "002_MZ_1", "003_MZ_1"))
 
 # Linear model with fixed effects of sample and feature, no intercept
-fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = a1ag)
+fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = sub_dia)
 ```
 
 ### Extract run effect from the linear model
 
-```{r, eval=FALSE}
+```{r}
 summary(fit)
 ```
 
-```{r}
+```{r, eval=FALSE}
 str(summary(fit))
-
-head(summary(fit)$coefficients)
 ```
 
-```{r, eval=FALSE}
-View(summary(fit)$coefficients)
+```{r}
+coef(fit)
+coef(summary(fit))
 ```
 
 ```{r}
 fit_coef <- coef(fit)
-head(fit_coef)
 
-data_frame(effect = attr(fit_coef, "names"), estimate = unname(fit_coef)) %>% 
+data_frame(effect = names(fit_coef), estimate = fit_coef) %>% 
     filter(grepl("sample", effect))
 ```
 
@@ -119,26 +116,22 @@ data_frame(effect = attr(fit_coef, "names"), estimate = unname(fit_coef)) %>%
 * Add new results to previous ones in every iteration with `rbind()`
 
 ```{r}
-# Unique proteins in the dataset
-uniq_prot <- levels(twin_dia2$protein)
+# Proteins in the dataset
+prots <- levels(twin_dia2$protein)
 
 # Approach 1
 t_start <- proc.time()
 df_allprot <- NULL
-for (i in seq_along(uniq_prot)) {
+for (i in seq_along(prots)) {
     # Subset for one protein
-    oneprot <- twin_dia2 %>% filter(protein == uniq_prot[i])
+    oneprot <- twin_dia2 %>% filter(protein == prots[i])
     # Fit linear model and extract estimates
     fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = oneprot)
     fit_coef <- coef(fit)
     # Assemble the result in a data frame
-    df_oneprot <- data_frame(
-        protein = uniq_prot[i], 
-        effect = attr(fit_coef, "names"), 
-        estimate = unname(fit_coef)
-    ) %>% 
+    df_oneprot <- data_frame(protein = prots[i], effect = names(fit_coef), estimate = fit_coef) %>% 
         filter(grepl("sample", effect))
-    # Attach new result to those in previous iterations
+    # Combine new result with those in previous iterations
     df_allprot <- rbind(df_allprot, df_oneprot)
 }
 (t1 <- proc.time() - t_start)
@@ -157,23 +150,18 @@ We should avoid this approach as it's not very efficient - in every iteration, R
 
 * Combine the results into a data frame with `dplyr::bind_rows()`
 
-
 ```{r}
 # Approach 2
 t_start <- proc.time()
-list_allprot <- vector("list", length = length(uniq_prot))
-for (i in seq_along(uniq_prot)) {
+list_allprot <- vector("list", length = length(prots))
+for (i in seq_along(prots)) {
     # Subset for one protein
-    oneprot <- twin_dia2 %>% filter(protein == uniq_prot[i])
+    oneprot <- twin_dia2 %>% filter(protein == prots[i])
     # Fit linear model and extract estimates
     fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = oneprot)
     fit_coef <- coef(fit)
     # Assemble the result in a data frame, and save to the list
-    list_allprot[[i]] <- data_frame(
-        protein = uniq_prot[i], 
-        effect = attr(fit_coef, "names"), 
-        estimate = unname(fit_coef)
-    ) %>% 
+    list_allprot[[i]] <- data_frame(protein = prots[i], effect = names(fit_coef), estimate = fit_coef) %>%
         filter(grepl("sample", effect))
 }
 df_allprot <- bind_rows(list_allprot)
@@ -191,13 +179,14 @@ The approaches discussed so far have two obvious drawbacks:
 
 A library that turns model objects into data frames in tidy format with three tidying methods: 
 
-* Extract component-level statistics with `broom::tidy()`: 
+* Extract component-level statistics with `broom::tidy()`
 
-* Extract observation-level statistics with `broom::augment()` 
+* Extract observation-level statistics with `broom::augment()`
 
-* Extract model-level statistics with `broom::glance()` 
+* Extract model-level statistics with `broom::glance()`
 
 ```{r}
+# install.packages("broom")
 library(broom)
 ?broom
 ```
@@ -206,12 +195,12 @@ library(broom)
 ### Use broom to tidy output objects of models
 
 ```{r}
-fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = a1ag)
+fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = sub_dia)
 
 # Each row is a coefficient
-head(tidy(fit))
+tidy(fit)
 
-# Each row is an observation
+# Each row is an observation; new columns start with .
 head(augment(fit))
 
 # One row for the model
@@ -299,12 +288,14 @@ nested_dia[[1, "data"]]
 
 * Nested data frame is an instance of list-columns
 
-* Library purrr provides a set of tools for functional programming (to be discussed in more detail)
+* Library purrr provides a set of tools for functional programming
 
 * Library broom provides tools to extract model-based summaries in a tidy format
 
 
-*[TODO]: briefly introduce syntax of `purrr::map()`*
+#### The map functions
+
+`map(X, FUN)` carries out the process: loop over a vector `X`, apply some operation `FUN()` to each element of `X`, and save the results as a list. 
 
 ```{r}
 # For each protein, fit a linear model with purrr::map()
