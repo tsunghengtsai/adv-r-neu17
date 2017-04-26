@@ -13,9 +13,9 @@ knitr::opts_chunk$set(message=FALSE, warning=FALSE)
 
 ## Learning goals
 
-1. Make data suitable to use with tools in R
+1. Make data suitable to use with tools in R.
 
-2. Efficient data manipulation and transformation
+2. Efficient data manipulation and transformation.
 
 
 ## Reference
@@ -28,7 +28,7 @@ http://r4ds.had.co.nz/
 
 ```{r, warning=FALSE, message=FALSE}
 library(tidyverse)
-load("data/adv-R-twin2.RData")
+load("data/adv-R-twin.RData")
 ```
 
 
@@ -36,29 +36,32 @@ load("data/adv-R-twin2.RData")
 
 Liu et al., Quantitative variability of 342 plasma proteins in a human twin population, *Molecular Systems Biology*, 2015. [PMID: 25652787]
 
-* 232 plasma samples
-    - 58 pairs of monozygotic (MZ) and dizygotic (DZ) twins
-    - 2 time points
-    - $58 \times 2 \times 2 = 232$
+* 232 MS runs of plasma samples:
+    - 58 pairs of monozygotic (MZ) and dizygotic (DZ) twins.
+    - 2 time points.
+    - $58 \times 2 \times 2 = 232$.
 
-* Data acquired with MS workflows of
-    - Data independent acquisition (DIA)
-    - Selected reaction monitoring (SRM)
+* Data acquired with MS workflows of:
+    - Data independent acquisition (DIA).
+    - Selected reaction monitoring (SRM).
 
-* Subset of the original dataset (with `r length(unique(twin_dia$protein))` proteins by DIA and `r length(unique(twin_srm$protein))` proteins by SRM)
+* Subset of the original dataset (with `r length(unique(twin_dia$protein))` proteins by DIA and `r length(unique(twin_srm$protein))` proteins by SRM).
 
 ```{r}
 str(twin_dia)
 ```
 
-The two data frames have the same format, containing 6 columns
+The two data frames have the same format, containing 9 columns:
 
-* `protein` (factor): name of protein
-* `feature` (factor): combination of peptide, precursor charge state, fragment ion, and product charge state, separated by `_`
-* `pair` (integer): pair index (1-58)
-* `sample` (factor): combination of subject index (001-116), zygosity (MZ or DZ), and time (1 or 2), separated by `_`
-* `intensity_l` (numeric): integrated feature intensity from light (L) channel
-* `intensity_h` (numeric): integrated feature intensity from heavy (H, aka reference) channel
+* `protein` (chr): protein name.
+* `feature` (chr): combination of peptide, precursor charge state, fragment ion, and product charge state, separated by `_`.
+* `run` (chr): MS run identifier (R001-R232).
+* `pair` (int): pair identifier number (1-58).
+* `zygosity` (factor): zygosity (MZ, DZ).
+* `subject` (int): subject identifier number (1-116).
+* `visit` (int): time of visit (1, 2).
+* `intensity_l` (num): integrated feature intensity from light (L) channel.
+* `intensity_h` (num): integrated feature intensity from heavy (H, aka reference) channel.
 
 ```{r}
 head(twin_dia)
@@ -68,16 +71,16 @@ head(twin_srm)
 
 ## Tasks
 
-**Task 1:** normalization of feature intensities, in a way that the median intensity of each run in heavy channel is identical (constant normalization)
+**Task 1:** normalization of feature intensities, in a way that the median intensity of each run in heavy channel is identical (constant normalization).
 
-**Task 2:** comparison between DIA and SRM datasets, to evaluate their agreement in terms of protein quantification
+**Task 2:** comparison between DIA and SRM datasets, to evaluate their agreement in terms of protein quantification.
 
-We will discuss tools in the tidyverse to address the tasks. In particular, how to tidy data, manipulate and transform data, carry out split-apply-combine approach, and join datasets in a consistent fashion using tidyr and dplyr
+We will discuss tools in the tidyverse to address the tasks. In particular, how to tidy data, manipulate and transform data, carry out split-apply-combine approach, and join datasets in a consistent fashion using tidyr and dplyr.
 
 
 ## Helpful conventions for data wrangling
 
-Local data frame `tbl_df()` creates a wrapper of data frame that displays nicely in the console
+Local data frame `tbl_df()` creates a wrapper of data frame that displays nicely in the console.
 
 ```{r}
 twin_dia <- tbl_df(twin_dia)
@@ -89,13 +92,13 @@ class(twin_dia)
 twin_dia
 ```
 
-`View()` calls the data viewer in RStudio
+`View()` calls the data viewer in RStudio:
 
 ```{r, eval=FALSE}
 View(twin_dia)
 ```
 
-The **pipe operator** `%>%` to chain multiple operations 
+The **pipe operator** `%>%` to chain multiple operations: 
 
 ```{r, eval=FALSE}
 # Equivalent representations
@@ -109,20 +112,20 @@ FUN_2( FUN_1(X, Y), Z )
 X %>% FUN_1(Y) %>% FUN_2(Z)
 ```
 
-When your analysis involves multiple processing steps, this makes the processing flow clear 
+When your analysis involves multiple processing steps, this makes the processing flow clear.
 
-The RStudio keyboard shortcut: Ctrl + Shift + M (Windows), Cmd + Shift + M (Mac)
+The RStudio keyboard shortcut: Ctrl + Shift + M (Windows), Cmd + Shift + M (Mac).
 
 
 ## Tidy data
 
 In a tidy dataset:
 
-* Each **variable** is saved in its own **column**
+* Each **variable** is saved in its own **column**.
 
-* Each **observation** is saved in its own **row**
+* Each **observation** is saved in its own **row**.
 
-* Each type of observational unit is stored in a single table
+* Each type of observational unit is stored in a single table.
 
 Why tidy data? Tidy data complements R's **vectorized operations**. It is easy to access variables in a tidy dataset, and R will automatically preserve observations as you manipulate variables. 
 
@@ -130,20 +133,20 @@ Why tidy data? Tidy data complements R's **vectorized operations**. It is easy t
 knitr::include_graphics('fig/tidy-why.png')
 ```
 
-Are the input datasets `twin_dia` and `twin_srm` tidy? Let's look at a few examples with values for 2 proteins (APOA, C1QA) and 3 samples (001_MZ_1, 002_MZ_1, 003_MZ_1) from the SRM dataset
+Are the input datasets `twin_dia` and `twin_srm` tidy? Let's look at a few examples with values for 2 proteins (APOA, C1QA) and 3 samples (R001, R002, R003) from the SRM dataset.
 
 
 ```{r, echo=FALSE}
 # Making untidy data
-td_sub <- tbl_df(twin_srm) %>% select(-pair) %>% 
-    filter(sample %in% c("001_MZ_1", "002_MZ_1", "003_MZ_1"), protein %in% c("APOA", "C1QA"))
+td_sub <- tbl_df(twin_srm) %>% select(protein, feature, run, intensity_h, intensity_l) %>% 
+    filter(run %in% c("R001", "R002", "R003"), protein %in% c("APOA", "C1QA"))
 
-sub1a <- td_sub %>% select(-intensity_l) %>% spread(sample, intensity_h, convert = F)
-sub1b <- td_sub %>% select(-intensity_h) %>% spread(sample, intensity_l, convert = F)
+sub1a <- td_sub %>% select(-intensity_l) %>% spread(run, intensity_h, convert = F)
+sub1b <- td_sub %>% select(-intensity_h) %>% spread(run, intensity_l, convert = F)
 sub2 <- td_sub %>% gather(key = "label", value = "intensity", intensity_h, intensity_l) %>% 
     mutate(label = ifelse(label == "intensity_h", "heavy", "light")) %>% 
-    arrange(protein, feature, sample, label)
-sub12 <- sub2 %>% spread(key = sample, value = intensity)
+    arrange(protein, feature, run, label)
+sub12 <- sub2 %>% spread(key = run, value = intensity)
 sub3 <- td_sub %>% unite(intensity_both, intensity_h, intensity_l, sep = "/")
 ```
 
@@ -155,7 +158,7 @@ sub1a
 sub1b
 ```
 
-In `sub1a` and `sub1b`, some of the column names (001_MZ_1, 002_MZ_1, 003_MZ_1) are values of a variable, rather than names of variables
+In `sub1a` and `sub1b`, some of the column names (R001, R002, R003) are values of a variable, rather than names of variables.
 
 ```{r}
 sub2
@@ -163,33 +166,33 @@ sub2
 
 As for `sub2`, people may have different opinions on whether it is tidy based on the basic unit to be processed in the analysis: 
 
-* it is tidy, if you view *a feature in one channel (light or heavy) in a run* as an observation
+* It is tidy, if you view *a feature in one channel (light or heavy) in a run* as an observation.
 
-* it is not tidy, if you view *a feature in a run* as an observation, which is scattered across two rows
+* It is not tidy, if you view *a feature in a run* as an observation, which is scattered across two rows.
 
-We'll take the second view
+We'll take the second view.
 
 ```{r}
 sub12
 ```
 
-`sub12` is a case with both issues
+`sub12` is a case with both issues.
 
 ```{r}
 sub3
 ```
 
-The `intensity_both` column in `sub3` contains both `intensity_h` and `intensity_l` variables
+The `intensity_both` column in `sub3` contains both `intensity_h` and `intensity_l` variables.
 
 ## tidyr
 
-A package that reshapes the layout of datasets
+A package that reshapes the layout of datasets.
 
-* Make observations from variables with `tidyr::gather()`
+* Make observations from variables with `tidyr::gather()`.
 
-* Make variables from observations with `tidyr::spread()`
+* Make variables from observations with `tidyr::spread()`.
 
-* Split and merge columns with `tidyr::unite()` and `tidyr::separate()`
+* Split and merge columns with `tidyr::unite()` and `tidyr::separate()`.
 
 
 ### Use `gather()` to make observations from variables
@@ -200,19 +203,19 @@ sub1a
 
 Collapse multiple columns into two columns:
 
-1. a **key** column that contains the former column names
+1. A **key** column that contains the former column names.
 
-2. a **value** column that contains the former column cells
+2. A **value** column that contains the former column cells.
 
 ```{r}
-sub1a %>% gather(key = sample, value = intensity_h, `001_MZ_1`, `002_MZ_1`, `003_MZ_1`)
+sub1a %>% gather(key = run, value = intensity_h, R001, R002, R003)
 ```
 
-Apply for both `sub1a` and `sub1b` and merge the results 
+Apply for both `sub1a` and `sub1b` and merge the results: 
 
 ```{r}
-tidy1a <- sub1a %>% gather(key = sample, value = intensity_h, `001_MZ_1`, `002_MZ_1`, `003_MZ_1`)
-tidy1b <- sub1b %>% gather(key = sample, value = intensity_l, `001_MZ_1`, `002_MZ_1`, `003_MZ_1`)
+tidy1a <- sub1a %>% gather(key = run, value = intensity_h, R001, R002, R003)
+tidy1b <- sub1b %>% gather(key = run, value = intensity_l, R001, R002, R003)
 left_join(tidy1a, tidy1b)  # merge two parts of the dataset, introduced later 
 ```
 
@@ -225,24 +228,24 @@ sub2
 
 Generate multiple columns from two columns:
 
-1. each unique value in the **key** column becomes a column name
+1. Each unique value in the **key** column becomes a column name.
 
-2. each value in the **value** column becomes a cell in the new columns
+2. Each value in the **value** column becomes a cell in the new columns.
 
 ```{r}
 (tidy2 <- sub2 %>% spread(key = label, value = intensity))
 ```
 
-In some cases, both `gather()` and `spread()` are needed for data tidying
+In some cases, both `gather()` and `spread()` are needed for data tidying.
 
 ```{r}
 sub12
 ```
 
 ```{r}
-sub12 %>% gather(sample, intensity, `001_MZ_1`, `002_MZ_1`, `003_MZ_1`)
+sub12 %>% gather(run, intensity, R001, R002, R003)
 tidy12 <- sub12 %>% 
-    gather(sample, intensity, `001_MZ_1`, `002_MZ_1`, `003_MZ_1`) %>% 
+    gather(run, intensity, R001, R002, R003) %>% 
     spread(key = label, value = intensity) %>% 
     rename(intensity_h = heavy, intensity_l = light)
 tidy12
@@ -279,29 +282,29 @@ tidy12 %>%
 
 ## dplyr
 
-A package that helps manipulate and transform tabular data 
+A package that helps manipulate and transform tabular data. 
 
-* Reshape a dataset (without changing its content)
+* Reshape a dataset (without changing its content):
 
-    - Rename the columns of a data frame with `dplyr::rename()`
+    - Rename the columns of a data frame with `dplyr::rename()`.
 
-    - Order rows by values of a column with `dplyr::arrange()`
+    - Order rows by values of a column with `dplyr::arrange()`.
 
-* Data manipulation and transformation
+* Data manipulation and transformation:
 
-    - Extract existing variables with `dplyr::select()`
+    - Extract existing variables with `dplyr::select()`.
 
-    - Extract existing observations with `dplyr::filter()`
+    - Extract existing observations with `dplyr::filter()`.
 
-    - Derive new variables with `dplyr::mutate()`
+    - Derive new variables with `dplyr::mutate()`.
 
-    - Make grouped summaries with `dplyr::summarise()` and `dplyr::group_by()`
+    - Make grouped summaries with `dplyr::summarise()` and `dplyr::group_by()`.
 
-* Join datasets
+* Join datasets:
 
-    - Mutating joins with `dplyr::left_join()`, `dplyr::right_join()`, `dplyr::inner_join()`, `dplyr::full_join()`
+    - Mutating joins with `dplyr::left_join()`, `dplyr::right_join()`, `dplyr::inner_join()`, `dplyr::full_join()`.
 
-    - Filtering joins `dplyr::semi_join()`, `dplyr::anti_join()`
+    - Filtering joins `dplyr::semi_join()`, `dplyr::anti_join()`.
 
 
 ### Use `rename()` to rename column
@@ -365,13 +368,13 @@ twin_dia %>% filter(!(is.na(intensity_h) | is.na(intensity_l)))
 
 ```{r}
 # Keep observations from DZ, 2nd visit
-twin_dia %>% filter(grepl("DZ_2", sample))
+# twin_dia %>% filter(grepl("DZ_2", sample))
 ```
 
 
 ### Use `mutate()` to make new variables
 
-`mutate()` uses **window functions**, functions that take a vector of values and return another vector of values
+`mutate()` uses **window functions**, functions that take a vector of values and return another vector of values.
 
 ```{r}
 # Log2 transformation
@@ -387,11 +390,11 @@ twin_dia %>%
 ```
 
 
-### Use `summarise()` and `group_by()` to make grouped summaries
+### Use `group_by()` and `summarise()` to make grouped summaries
 
-* `summarise()` changes the unit of analysis by using **summary functions**, functions that take a vector of values and return a single value
+* `summarise()` changes the unit of analysis by using **summary functions**, functions that take a vector of values and return a single value.
 
-* `group_by()` defines the unit of analysis
+* `group_by()` defines the unit of analysis.
 
 ```{r}
 # Compute mean, sd and median of values in column intensity_l
@@ -404,9 +407,9 @@ twin_dia %>%
 ```
 
 ```{r}
-# Compute mean, sd and median of values in column intensity_l, within each sample
+# Compute mean, sd and median of values in column intensity_l, within each run
 twin_dia %>% 
-    group_by(sample) %>% 
+    group_by(run) %>% 
     summarise(
         intensity_ave = mean(intensity_l, na.rm = TRUE), 
         intensity_sd = sd(intensity_l, na.rm = TRUE), 
@@ -422,12 +425,12 @@ twin_dia %>%
 ```{r}
 # Equalizing medians
 twin_dia %>% mutate(log2inty_h = log2(intensity_h)) %>% 
-    group_by(sample) %>% 
+    group_by(run) %>% 
     summarise(log2inty_med = median(log2inty_h, na.rm = TRUE)) %>% 
     mutate(log2inty_adj = median(log2inty_med) - log2inty_med)
 ```
 
-Now, what's left for carrying out Task 1 is to merge this summary to the original data frame
+Now, what's left for carrying out Task 1 is to merge this summary to the original data frame.
 
 
 ## Combine datasets
@@ -458,7 +461,7 @@ knitr::include_graphics('fig/join-setup.png')
 
 #### Inner join 
 
-`inner_join(x, y)`: keep only the observations with equal keys
+`inner_join(x, y)`: keep only the observations with equal keys.
 
 ```{r, out.width=500, echo=FALSE, fig.align='center'}
 knitr::include_graphics('fig/join-inner.png')
@@ -466,11 +469,11 @@ knitr::include_graphics('fig/join-inner.png')
 
 #### Outer joins 
 
-* `left_join(x, y)`: keep all observations in `x` and merge `y` to it
+* `left_join(x, y)`: keep all observations in `x` and merge `y` to it.
 
-* `right_join(x, y)`: keep all observations in `y` and merge `x` to it
+* `right_join(x, y)`: keep all observations in `y` and merge `x` to it.
 
-* `full_join(x, y)`: keep all observations in `x` and `y`
+* `full_join(x, y)`: keep all observations in `x` and `y`.
 
 ```{r, out.width=500, echo=FALSE, fig.align='center'}
 knitr::include_graphics('fig/join-outer.png')
@@ -479,9 +482,9 @@ knitr::include_graphics('fig/join-outer.png')
 
 ### Filtering joins
 
-* `semi_join(x, y)`: keep all observations in `x` that have a match in `y`
+* `semi_join(x, y)`: keep all observations in `x` that have a match in `y`.
 
-* `anti_join(x, y)`: drops all observations in `x` that have a match in `y`
+* `anti_join(x, y)`: drops all observations in `x` that have a match in `y`.
 
 ```{r, out.width=500, echo=FALSE, fig.align='center'}
 knitr::include_graphics('fig/join-semi.png')
@@ -497,7 +500,7 @@ knitr::include_graphics('fig/join-anti.png')
 
 ### Split-apply-combine approach to derive the adjustment 
 
-Use `summarise()` with `group_by()` 
+Use `summarise()` with `group_by()`: 
 
 ```{r}
 twin_dia <- twin_dia %>% 
@@ -507,7 +510,7 @@ twin_dia <- twin_dia %>%
     )
 
 med_dia <- twin_dia %>% 
-    group_by(sample) %>% 
+    group_by(run) %>% 
     summarise(log2inty_med = median(log2inty_h, na.rm = TRUE)) %>% 
     mutate(log2inty_adj = median(log2inty_med) - log2inty_med)
 
@@ -529,7 +532,7 @@ twin_dia2 <- left_join(twin_dia, med_dia) %>%
     )
 ```
 
-Similarly, for the SRM dataset
+Similarly, for the SRM dataset:
 
 ```{r}
 twin_srm <- twin_srm %>% 
@@ -538,7 +541,7 @@ twin_srm <- twin_srm %>%
         log2inty_l = log2(intensity_l)
     ) 
 
-med_srm <- twin_srm %>% group_by(sample) %>% 
+med_srm <- twin_srm %>% group_by(run) %>% 
     summarise(log2inty_med = median(log2inty_h, na.rm = TRUE)) %>% 
     mutate(log2inty_adj = median(log2inty_med) - log2inty_med)
 
@@ -552,21 +555,21 @@ twin_srm2 <- left_join(twin_srm, med_srm) %>%
 
 ### Visualize the result
 
-Boxplot of feature log-intensities in each run, before normalization
+Boxplot of feature log-intensities in each run, before normalization:
 
 ```{r, fig.width=6, fig.height=4, fig.align='center', warning=FALSE, message=FALSE}
 library(stringr)
-twin_dia2 %>% filter(str_detect(sample, str_c(str_pad(1:10, 3, pad = "0"), collapse = "|"))) %>% 
-    ggplot(aes(sample, log2inty_h)) + 
+twin_dia2 %>% filter(str_detect(run, str_c(str_pad(1:10, 3, pad = "0"), collapse = "|"))) %>% 
+    ggplot(aes(run, log2inty_h)) + 
     geom_boxplot() + 
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
-Boxplot of feature log-intensities in each run, after normalization
+Boxplot of feature log-intensities in each run, after normalization:
 
 ```{r, fig.width=6, fig.height=4, fig.align='center', warning=FALSE, message=FALSE}
-twin_dia2 %>% filter(str_detect(sample, str_c(str_pad(1:10, 3, pad = "0"), collapse = "|"))) %>% 
-    ggplot(aes(sample, log2inty_h_cn)) + 
+twin_dia2 %>% filter(str_detect(run, str_c(str_pad(1:10, 3, pad = "0"), collapse = "|"))) %>% 
+    ggplot(aes(run, log2inty_h_cn)) + 
     geom_boxplot() + 
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
@@ -574,22 +577,22 @@ twin_dia2 %>% filter(str_detect(sample, str_c(str_pad(1:10, 3, pad = "0"), colla
 
 ## Task 2: comparison between DIA and SRM datasets
 
-Evaluate the agreement of protein quantification between DIA and SRM
+Evaluate the agreement of protein quantification between DIA and SRM:
 
-* Protein quantification with each dataset using the log of summed feature intensities
+* Protein quantification with each dataset using the log of summed feature intensities.
 
-* Merge two datasets
+* Merge two datasets.
 
-* Evaluate their agreement
+* Evaluate their agreement.
 
 
 ### Protein quantification with each dataset
 
-Sum up all the normalized feature intensities for each protein
+Sum up all the normalized feature intensities for each protein:
 
 ```{r}
 # Perform log of sum in the DIA dataset
-los_dia <- twin_dia2 %>% group_by(sample, protein) %>% 
+los_dia <- twin_dia2 %>% group_by(run, protein) %>% 
     summarise(sum_dia = sum(2 ^ (log2inty_l_cn), na.rm = TRUE)) %>% 
     ungroup() %>% 
     mutate(logsum_dia = ifelse(sum_dia == 0, 0, log2(sum_dia)))
@@ -598,7 +601,7 @@ los_dia
 
 ```{r}
 # Summarization for the SRM data
-los_srm <- twin_srm2 %>% group_by(sample, protein) %>% 
+los_srm <- twin_srm2 %>% group_by(run, protein) %>% 
     summarise(sum_srm = sum(2 ^ (log2inty_l_cn), na.rm = TRUE)) %>% 
     ungroup() %>% 
     mutate(logsum_srm = ifelse(sum_srm == 0, 0, log2(sum_srm)))
@@ -627,13 +630,13 @@ ggplot(los_all, aes(logsum_dia, logsum_srm)) +
 
 ### Evaluate the agreement
 
-Compute the correlation coefficient
+Compute the correlation coefficient:
 
 ```{r}
 cor(los_all$logsum_dia, los_all$logsum_srm)
 ```
 
-Compute the correlation per protein
+Compute the correlation per protein:
 
 ```{r}
 los_all %>% group_by(protein) %>% 
@@ -641,7 +644,7 @@ los_all %>% group_by(protein) %>%
 ```
 
 
-## Limitation
+## Applying arbitrary operations to grouped data
 
 `summarise()` with `group_by()` is a great tool to apply the split-apply-combine strategy with **summary functions**. To deal with more complex output objects, however, more general tools are needed. 
 
@@ -655,5 +658,47 @@ los_all %>% group_by(protein) %>%
     summarise(corres = cor.test(logsum_dia, logsum_srm))
 ```
 
-We will discuss more general tools to address this issue
+
+### `group_by()` + `do()`
+
+```{r}
+twin_dia2 %>% 
+    group_by(protein) %>% 
+    do(head(., 2))
+```
+
+The pronoun `.` is used as an argument placeholder, on which the function apply.  
+
+```{r, eval=FALSE}
+# When input is not the first argument of a function
+FUN(Y, X)
+X %>% FUN(Y, .)
+
+FUN(Y, Z = X)
+X %>% FUN(Y, Z = .)
+```
+
+If you use named arguments, each argument becomes a list-variable in the output:
+
+```{r}
+twin_dia2 %>% 
+    group_by(protein) %>% 
+    do(top2 = head(., 2))
+```
+
+A list-variable can contain any arbitrary R object which makes this form of do() useful for storing models:
+
+```{r}
+los_all %>% group_by(protein) %>% 
+    do(fit_cor = cor.test(.$logsum_dia, .$logsum_srm))
+```
+
+This creates a list-column `fit_cor` to store the fitted models. We can use double bracket `[[]]` to retrieve the model objects:
+
+```{r}
+los_cor <- los_all %>% group_by(protein) %>% 
+    do(fit_cor = cor.test(.$logsum_dia, .$logsum_srm))
+los_cor$fit_cor[[1]]
+```
+
 
