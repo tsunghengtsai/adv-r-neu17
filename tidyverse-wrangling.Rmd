@@ -11,11 +11,9 @@ knitr::opts_chunk$set(message=FALSE, warning=FALSE)
 ```
 
 
-## Learning goals
+## Learning goal
 
-1. Make data suitable to use with tools in R.
-
-2. Efficient data manipulation and transformation.
+Efficient data manipulation and transformation in the tidyverse.
 
 
 ## Reference
@@ -366,11 +364,6 @@ twin_dia %>% filter(!is.na(intensity_h), !is.na(intensity_l))
 twin_dia %>% filter(!(is.na(intensity_h) | is.na(intensity_l)))
 ```
 
-```{r}
-# Keep observations from DZ, 2nd visit
-# twin_dia %>% filter(grepl("DZ_2", sample))
-```
-
 
 ### Use `mutate()` to make new variables
 
@@ -430,7 +423,7 @@ twin_dia %>% mutate(log2inty_h = log2(intensity_h)) %>%
     mutate(log2inty_adj = median(log2inty_med) - log2inty_med)
 ```
 
-Now, what's left for carrying out Task 1 is to merge this summary to the original data frame.
+Now, what's left for Task 1 is to merge this summary to the original data frame.
 
 
 ## Combine datasets
@@ -458,6 +451,7 @@ knitr::include_graphics('fig/join-setup.png')
 
 
 ### Mutating joins
+
 
 #### Inner join 
 
@@ -527,8 +521,10 @@ left_join(twin_dia, med_dia)
 ```{r}
 twin_dia2 <- left_join(twin_dia, med_dia) %>% 
     mutate(
-        log2inty_h_cn = log2inty_h + log2inty_adj, 
-        log2inty_l_cn = log2inty_l + log2inty_adj
+        log2inty_h = log2inty_h + log2inty_adj, 
+        log2inty_l = log2inty_l + log2inty_adj, 
+        intensity_h = 2 ^ log2inty_h,
+        intensity_l = 2 ^ log2inty_l
     )
 ```
 
@@ -547,8 +543,10 @@ med_srm <- twin_srm %>% group_by(run) %>%
 
 twin_srm2 <- left_join(twin_srm, med_srm) %>% 
     mutate(
-        log2inty_h_cn = log2inty_h + log2inty_adj, 
-        log2inty_l_cn = log2inty_l + log2inty_adj
+        log2inty_h = log2inty_h + log2inty_adj, 
+        log2inty_l = log2inty_l + log2inty_adj, 
+        intensity_h = 2 ^ log2inty_h,
+        intensity_l = 2 ^ log2inty_l
     )
 ```
 
@@ -559,7 +557,7 @@ Boxplot of feature log-intensities in each run, before normalization:
 
 ```{r, fig.width=6, fig.height=4, fig.align='center', warning=FALSE, message=FALSE}
 library(stringr)
-twin_dia2 %>% filter(str_detect(run, str_c(str_pad(1:10, 3, pad = "0"), collapse = "|"))) %>% 
+twin_dia %>% filter(str_detect(run, str_c(str_pad(1:20, 3, pad = "0"), collapse = "|"))) %>% 
     ggplot(aes(run, log2inty_h)) + 
     geom_boxplot() + 
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
@@ -568,8 +566,8 @@ twin_dia2 %>% filter(str_detect(run, str_c(str_pad(1:10, 3, pad = "0"), collapse
 Boxplot of feature log-intensities in each run, after normalization:
 
 ```{r, fig.width=6, fig.height=4, fig.align='center', warning=FALSE, message=FALSE}
-twin_dia2 %>% filter(str_detect(run, str_c(str_pad(1:10, 3, pad = "0"), collapse = "|"))) %>% 
-    ggplot(aes(run, log2inty_h_cn)) + 
+twin_dia2 %>% filter(str_detect(run, str_c(str_pad(1:20, 3, pad = "0"), collapse = "|"))) %>% 
+    ggplot(aes(run, log2inty_h)) + 
     geom_boxplot() + 
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
@@ -588,12 +586,12 @@ Evaluate the agreement of protein quantification between DIA and SRM:
 
 ### Protein quantification with each dataset
 
-Sum up all the normalized feature intensities for each protein:
+Sum up all the normalized feature intensities (in the light channel) for each protein:
 
 ```{r}
 # Perform log of sum in the DIA dataset
 los_dia <- twin_dia2 %>% group_by(run, protein) %>% 
-    summarise(sum_dia = sum(2 ^ (log2inty_l_cn), na.rm = TRUE)) %>% 
+    summarise(sum_dia = sum(intensity_l, na.rm = TRUE)) %>% 
     ungroup() %>% 
     mutate(logsum_dia = ifelse(sum_dia == 0, 0, log2(sum_dia)))
 los_dia
@@ -602,7 +600,7 @@ los_dia
 ```{r}
 # Summarization for the SRM data
 los_srm <- twin_srm2 %>% group_by(run, protein) %>% 
-    summarise(sum_srm = sum(2 ^ (log2inty_l_cn), na.rm = TRUE)) %>% 
+    summarise(sum_srm = sum(intensity_l, na.rm = TRUE)) %>% 
     ungroup() %>% 
     mutate(logsum_srm = ifelse(sum_srm == 0, 0, log2(sum_srm)))
 ```
@@ -623,8 +621,6 @@ ggplot(los_all, aes(logsum_dia, logsum_srm)) +
 ```{r, fig.width=7.5, fig.height=5, fig.align='center'}
 ggplot(los_all, aes(logsum_dia, logsum_srm)) + 
     geom_point(aes(colour = protein))
-    # theme(legend.position = "bottom") + 
-    # guides(colour = guide_legend(nrow=3,byrow=TRUE))
 ```
 
 
