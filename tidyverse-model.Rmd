@@ -11,40 +11,37 @@ knitr::opts_chunk$set(message=FALSE, warning=FALSE)
 ```
 
 
-## Learning goals
+## Learning goal
 
-1. General framework for data modeling with tidyverse tools
-
-2. Consistent approaches as in data wrangling and visualization
-
+Consistent workflow for both data wrangling and statistical modeling in the tidyverse.
 
 ```{r, warning=FALSE, message=FALSE}
 library(tidyverse)
-load("data/adv-R-twin2.RData")
+load("data/adv-R-twin.RData")
 ```
 
 
 ## Task
 
-Model-based summary of feature log-intensities for all proteins in every run
+Model-based summary of feature log-intensities for all proteins in every run.
 
-* Model the log-intensities of features for each protein considering feature and run as fixed effects
+* Model the log-intensities of features for each protein considering feature and run as fixed effects.
 
-* Run-level summarization with the fitted model
+* Run-level summarization with the fitted model.
 
 
 ## Approaches
 
-We will discuss tools to perform modeling/testing in multiple groups through
+We will discuss tools to perform modeling/testing in multiple groups through the use of: 
 
-* iterations
+* Iterations.
 
-* the use of nested data frame
+* List-columns.
 
 
 ## Normalization
 
-Same as in the previous session
+Same as in the previous section:
 
 ```{r}
 twin_dia <- tbl_df(twin_dia) %>% 
@@ -54,7 +51,7 @@ twin_dia <- tbl_df(twin_dia) %>%
     )
 
 med_dia <- twin_dia %>% 
-    group_by(sample) %>% 
+    group_by(run) %>% 
     summarise(log2inty_med = median(log2inty_h, na.rm = TRUE)) %>% 
     mutate(log2inty_adj = median(log2inty_med) - log2inty_med)
 
@@ -70,16 +67,17 @@ twin_dia2
 
 ## Use linear model to summarize feature log-intensities of a protein
 
-Model feature log-intensities with fixed effects of run and feature
+Model feature log-intensities with fixed effects of run and feature:
 
 ```{r}
-# One protein (AACT) measured in 3 runs (001_MZ_1, 002_MZ_1, 003_MZ_1)
+# One protein (AACT) measured in 3 runs (R001, R002, R003)
 sub_dia <- twin_dia2 %>% 
-    filter(protein == "AACT", sample %in% c("001_MZ_1", "002_MZ_1", "003_MZ_1"))
+    filter(protein == "AACT", run %in% c("R001", "R002", "R003"))
 
-# Linear model with fixed effects of sample and feature, no intercept
-fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = sub_dia)
+# Linear model with fixed effects of run and feature, no intercept
+fit <- lm(log2inty_l_cn ~ 0 + run + feature, data = sub_dia)
 ```
+
 
 ### Extract run effect from the linear model
 
@@ -100,7 +98,7 @@ coef(summary(fit))
 fit_coef <- coef(fit)
 
 data_frame(effect = names(fit_coef), estimate = fit_coef) %>% 
-    filter(grepl("sample", effect))
+    filter(grepl("run", effect))
 ```
 
 
@@ -109,15 +107,15 @@ data_frame(effect = names(fit_coef), estimate = fit_coef) %>%
 
 ### Approach 1
 
-* Loop over proteins
+* Loop over proteins.
 
-* Fit a linear model for each protein with `lm()`
+* Fit a linear model for each protein with `lm()` and extract relevant information.
 
-* Add new results to previous ones in every iteration with `rbind()`
+* Add new results to previous ones in every iteration with `rbind()`.
 
 ```{r}
 # Proteins in the dataset
-prots <- levels(twin_dia2$protein)
+prots <- unique(twin_dia2$protein)
 
 # Approach 1
 t_start <- proc.time()
@@ -126,11 +124,11 @@ for (i in seq_along(prots)) {
     # Subset for one protein
     oneprot <- twin_dia2 %>% filter(protein == prots[i])
     # Fit linear model and extract estimates
-    fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = oneprot)
+    fit <- lm(log2inty_l_cn ~ 0 + run + feature, data = oneprot)
     fit_coef <- coef(fit)
     # Assemble the result in a data frame
     df_oneprot <- data_frame(protein = prots[i], effect = names(fit_coef), estimate = fit_coef) %>% 
-        filter(grepl("sample", effect))
+        filter(grepl("run", effect))
     # Combine new result with those in previous iterations
     df_allprot <- rbind(df_allprot, df_oneprot)
 }
@@ -142,13 +140,13 @@ We should avoid this approach as it's not very efficient - in every iteration, R
 
 ### Approach 2
 
-* Loop over proteins
+* Loop over proteins.
 
-* Fit a linear model for each protein with `lm()`
+* Fit a linear model for each protein with `lm()` and extract relevant information.
 
-* Save results in a list
+* Save results in a list.
 
-* Combine the results into a data frame with `dplyr::bind_rows()`
+* Combine the results into a data frame with `dplyr::bind_rows()`.
 
 ```{r}
 # Approach 2
@@ -158,78 +156,44 @@ for (i in seq_along(prots)) {
     # Subset for one protein
     oneprot <- twin_dia2 %>% filter(protein == prots[i])
     # Fit linear model and extract estimates
-    fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = oneprot)
+    fit <- lm(log2inty_l_cn ~ 0 + run + feature, data = oneprot)
     fit_coef <- coef(fit)
     # Assemble the result in a data frame, and save to the list
     list_allprot[[i]] <- data_frame(protein = prots[i], effect = names(fit_coef), estimate = fit_coef) %>%
-        filter(grepl("sample", effect))
+        filter(grepl("run", effect))
 }
 df_allprot <- bind_rows(list_allprot)
 (t2 <- proc.time() - t_start)
 ```
 
-The approaches discussed so far have two obvious drawbacks: 
+The approaches discussed so far have two obvious limitations: 
 
-1. The output objects of models are not tidy - it requires additional efforts to reformat the objects and extract summaries of our interest
+1. The fitted models are not saved - it requires re-fitting the models to extract additional (unplanned) summaries.
 
-2. The fitted models are not saved - it requires re-fitting the models to extract additional (unplanned) summaries
-
-
-## broom
-
-A library that turns model objects into data frames in tidy format with three tidying methods: 
-
-* Extract component-level statistics with `broom::tidy()`
-
-* Extract observation-level statistics with `broom::augment()`
-
-* Extract model-level statistics with `broom::glance()`
-
-```{r}
-# install.packages("broom")
-library(broom)
-?broom
-```
+2. The output objects of models are not tidy - it requires additional efforts to reformat the objects and extract summaries of our interest.
 
 
-### Use broom to tidy output objects of models
+## General split-apply-combine approach with arbitrary operations
+
+Better solution to avoid the limitations using: 
+
+* List-columns.
+
+* Tidying methods for model objects in broom.
+
+
+### `group_by()` + `do()`
+
+We can save the fitted model for each protein in a new list-column: 
 
 ```{r}
-fit <- lm(log2inty_l_cn ~ 0 + sample + feature, data = sub_dia)
-
-# Each row is a coefficient
-tidy(fit)
-
-# Each row is an observation; new columns start with .
-head(augment(fit))
-
-# One row for the model
-glance(fit)
+fit_dia <- twin_dia2 %>% 
+    group_by(protein) %>% 
+    do(fit = lm(log2inty_l_cn ~ 0 + run + feature, data = .))
+fit_dia
 ```
 
-
-### Approach 3
-
-* Define the analysis unit with `dplyr::group_by()`
-
-* Fit a linear model for each protein with `lm()`
-
-* Extract the estimates with `broom::tidy()` and `dplyr::do()` to summarize the information about each protein
-
-
-```{r}
-# Approach 3
-t_start <- proc.time()
-twin_dia2 %>% 
-    group_by(protein) %>%
-    do(tidy(lm(log2inty_l_cn ~ 0 + sample + feature, data = .))) %>% 
-    filter(grepl("sample", term))
-t3 <- proc.time() - t_start
-```
-
-Note that multiple rows are generated within each model. 
-
-`.` is used as an argument placeholder
+`.` is used as an argument placeholder, as in
 
 ```{r, eval=FALSE}
 # When input is not the first argument of a function
@@ -240,29 +204,73 @@ FUN(Y, Z = X)
 X %>% FUN(Y, Z = .)
 ```
 
-It's also possible to save the fitted model for each protein, by saving the modeling output into a new column `fit`: 
+
+### broom
+
+A library that turns model objects into data frames in tidy format with three tidying methods: 
+
+* Extract parameter-level summaries with `broom::tidy()`.
+
+* Extract observation-level summaries with `broom::augment()`.
+
+* Extract model-level summaries with `broom::glance()`.
 
 ```{r}
-fit_dia <- twin_dia2 %>% 
-    group_by(protein) %>% 
-    do(fit = lm(log2inty_l_cn ~ 0 + sample + feature, data = .))
-fit_dia
+# install.packages("broom")
+library(broom)
+?broom
 ```
 
-Applying the tidying methods on each row of the rowwise data frame: 
+Use broom to tidy output objects of models
+
+```{r}
+fit <- lm(log2inty_l_cn ~ 0 + run + feature, data = sub_dia)
+
+# Each row is a coefficient
+tidy(fit)
+
+# Each row is an observation; new columns from the model start with .
+head(augment(fit))
+
+# One row for the model
+glance(fit)
+```
+
+
+### Approach 3
+
+* Define the analysis unit with `dplyr::group_by()`.
+
+* Fit a linear model for each protein with `lm()`.
+
+* Extract the estimates with `broom::tidy()` and `dplyr::do()` to summarize the information for each protein.
+
+
+```{r}
+# Approach 3
+t_start <- proc.time()
+twin_dia2 %>% 
+    group_by(protein) %>%
+    do(tidy(lm(log2inty_l_cn ~ 0 + run + feature, data = .))) %>% 
+    filter(grepl("run", term))
+t3 <- proc.time() - t_start
+```
+Note that multiple rows are generated within each model. 
+
+Or, apply the tidying methods on the data frame `fit_data` with fitted models: 
 
 ```{r, eval=FALSE}
 fit_dia %>% tidy(fit)
 ```
 
 
-## Nested data frame
+### Nested data frame
 
-Use `tidyr::nest()` to create nested data frame for more general approaches
+Use `tidyr::nest()` to create nested data frame for more general approaches.
 
-* One row per group
+* One row per group.
 
-* New `data` column to store the stratified data, in a list (list-column)
+* New `data` column to store the stratified data, in a list (list-column).
 
 ```{r}
 nested_dia <- twin_dia2 %>% 
@@ -271,7 +279,7 @@ nested_dia <- twin_dia2 %>%
 nested_dia
 ```
 
-Extract/assess data in the list with double brackets `[[]]`
+Extract/assess data in the list with double brackets `[[]]`:
 
 ```{r}
 # Data of protein A1AG_BOVINE
@@ -283,24 +291,21 @@ nested_dia$data[[1]]
 nested_dia[[1, "data"]]
 ```
 
+Nested data frame is an instance of list-columns. If we could easily manipulate/transform the list-columns, a consistent workflow can then be built natually. 
 
-### General split-apply-combine approach
+* Library purrr provides a set of tools for functional programming.
 
-* Nested data frame is an instance of list-columns
-
-* Library purrr provides a set of tools for functional programming
-
-* Library broom provides tools to extract model-based summaries in a tidy format
+* Library broom provides tools to extract model-based summaries in a tidy format.
 
 
-#### The map functions
+### The map functions of purrr
 
 `map(X, FUN)` carries out the process: loop over a vector `X`, apply some operation `FUN()` to each element of `X`, and save the results as a list. 
 
 ```{r}
 # For each protein, fit a linear model with purrr::map()
 nested_dia <- nested_dia %>% 
-    mutate(fit = map(data, ~ lm(log2inty_l_cn ~ 0 + sample + feature, data = .)))
+    mutate(fit = map(data, ~ lm(log2inty_l_cn ~ 0 + run + feature, data = .)))
 nested_dia
 ```
 
@@ -323,13 +328,13 @@ nested_dia %>% unnest(param)
 
 ### Approach 4
 
-* Created a nested data frame with `dplyr::group_by()` `tidyr::nest()`
+* Create a nested data frame with `dplyr::group_by()` and `tidyr::nest()`.
 
-* Fit a linear model for each protein with `lm()` and `purrr::map()`
+* Fit a linear model for each protein with `lm()` and `purrr::map()`.
 
-* Extract the estimates for each protein with `broom::tidy()` and `purrr::map()`
+* Extract the estimates for each protein with `broom::tidy()` and `purrr::map()`.
 
-* Transform back to the original form with `tidyr::unnest()`
+* Transform back to the original form with `tidyr::unnest()`.
 
 ```{r}
 # Approach 4
@@ -342,12 +347,12 @@ nested_dia <- twin_dia2 %>%
 # Model and tidy output objects
 nested_dia <- nested_dia %>% 
     mutate(
-        fit = map(data, ~ lm(log2inty_l_cn ~ 0 + sample + feature, data = .)), 
+        fit = map(data, ~ lm(log2inty_l_cn ~ 0 + run + feature, data = .)), 
         param = map(fit, tidy)
     )
 # Unnest data and additional manipulation
 nested_dia %>% unnest(param) %>% 
-    filter(grepl("sample", term))
+    filter(grepl("run", term))
 t4 <- proc.time() - t_start
 ```
 
