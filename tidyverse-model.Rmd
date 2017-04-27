@@ -57,8 +57,10 @@ med_dia <- twin_dia %>%
 
 twin_dia2 <- left_join(twin_dia, med_dia) %>% 
     mutate(
-        log2inty_h_cn = log2inty_h + log2inty_adj, 
-        log2inty_l_cn = log2inty_l + log2inty_adj
+        log2inty_h = log2inty_h + log2inty_adj, 
+        log2inty_l = log2inty_l + log2inty_adj, 
+        intensity_h = 2 ^ log2inty_h,
+        intensity_l = 2 ^ log2inty_l
     )
 
 twin_dia2
@@ -75,7 +77,7 @@ sub_dia <- twin_dia2 %>%
     filter(protein == "AACT", run %in% c("R001", "R002", "R003"))
 
 # Linear model with fixed effects of run and feature, no intercept
-fit <- lm(log2inty_l_cn ~ 0 + run + feature, data = sub_dia)
+fit <- lm(log2inty_l ~ 0 + run + feature, data = sub_dia)
 ```
 
 
@@ -98,7 +100,8 @@ coef(summary(fit))
 fit_coef <- coef(fit)
 
 data_frame(effect = names(fit_coef), estimate = fit_coef) %>% 
-    filter(grepl("run", effect))
+    filter(grepl("run", effect)) %>% 
+    mutate(effect = gsub("run", "", effect))
 ```
 
 
@@ -124,11 +127,12 @@ for (i in seq_along(prots)) {
     # Subset for one protein
     oneprot <- twin_dia2 %>% filter(protein == prots[i])
     # Fit linear model and extract estimates
-    fit <- lm(log2inty_l_cn ~ 0 + run + feature, data = oneprot)
+    fit <- lm(log2inty_l ~ 0 + run + feature, data = oneprot)
     fit_coef <- coef(fit)
     # Assemble the result in a data frame
     df_oneprot <- data_frame(protein = prots[i], effect = names(fit_coef), estimate = fit_coef) %>% 
-        filter(grepl("run", effect))
+        filter(grepl("run", effect)) %>% 
+        mutate(effect = gsub("run", "", effect))
     # Combine new result with those in previous iterations
     df_allprot <- rbind(df_allprot, df_oneprot)
 }
@@ -156,11 +160,12 @@ for (i in seq_along(prots)) {
     # Subset for one protein
     oneprot <- twin_dia2 %>% filter(protein == prots[i])
     # Fit linear model and extract estimates
-    fit <- lm(log2inty_l_cn ~ 0 + run + feature, data = oneprot)
+    fit <- lm(log2inty_l ~ 0 + run + feature, data = oneprot)
     fit_coef <- coef(fit)
     # Assemble the result in a data frame, and save to the list
     list_allprot[[i]] <- data_frame(protein = prots[i], effect = names(fit_coef), estimate = fit_coef) %>%
-        filter(grepl("run", effect))
+        filter(grepl("run", effect)) %>% 
+        mutate(effect = gsub("run", "", effect))
 }
 df_allprot <- bind_rows(list_allprot)
 (t2 <- proc.time() - t_start)
@@ -189,7 +194,7 @@ We can save the fitted model for each protein in a new list-column:
 ```{r}
 fit_dia <- twin_dia2 %>% 
     group_by(protein) %>% 
-    do(fit = lm(log2inty_l_cn ~ 0 + run + feature, data = .))
+    do(fit = lm(log2inty_l ~ 0 + run + feature, data = .))
 fit_dia
 ```
 
@@ -224,7 +229,7 @@ library(broom)
 Use broom to tidy output objects of models
 
 ```{r}
-fit <- lm(log2inty_l_cn ~ 0 + run + feature, data = sub_dia)
+fit <- lm(log2inty_l ~ 0 + run + feature, data = sub_dia)
 
 # Each row is a coefficient
 tidy(fit)
@@ -251,8 +256,9 @@ glance(fit)
 t_start <- proc.time()
 twin_dia2 %>% 
     group_by(protein) %>%
-    do(tidy(lm(log2inty_l_cn ~ 0 + run + feature, data = .))) %>% 
-    filter(grepl("run", term))
+    do(tidy(lm(log2inty_l ~ 0 + run + feature, data = .))) %>% 
+    filter(grepl("run", term)) %>% 
+    mutate(term = gsub("run", "", term))
 t3 <- proc.time() - t_start
 ```
 Note that multiple rows are generated within each model. 
@@ -305,7 +311,7 @@ Nested data frame is an instance of list-columns. If we could easily manipulate/
 ```{r}
 # For each protein, fit a linear model with purrr::map()
 nested_dia <- nested_dia %>% 
-    mutate(fit = map(data, ~ lm(log2inty_l_cn ~ 0 + run + feature, data = .)))
+    mutate(fit = map(data, ~ lm(log2inty_l ~ 0 + run + feature, data = .)))
 nested_dia
 ```
 
@@ -347,12 +353,13 @@ nested_dia <- twin_dia2 %>%
 # Model and tidy output objects
 nested_dia <- nested_dia %>% 
     mutate(
-        fit = map(data, ~ lm(log2inty_l_cn ~ 0 + run + feature, data = .)), 
+        fit = map(data, ~ lm(log2inty_l ~ 0 + run + feature, data = .)), 
         param = map(fit, tidy)
     )
 # Unnest data and additional manipulation
 nested_dia %>% unnest(param) %>% 
-    filter(grepl("run", term))
+    filter(grepl("run", term)) %>% 
+    mutate(term = gsub("run", "", term))
 t4 <- proc.time() - t_start
 ```
 
@@ -361,3 +368,4 @@ A major advantage of Approach 4 is that it creates a very rich structured datase
 ```{r}
 rbind(t1, t2, t3, t4)
 ```
+
