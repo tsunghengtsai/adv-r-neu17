@@ -34,9 +34,8 @@ load("data/adv-R-twin.RData")
 
 ```{r, fig.width=8, fig.height=5, echo=FALSE, fig.align='center', warning=FALSE, message=FALSE}
 library(tidyverse)
-library(stringr)
-sub <- tbl_df(twin_dia) %>% 
-    filter(str_detect(run, str_c(str_pad(1:20, 3, pad = "0"), collapse = "|"))) %>%
+sub <- as_tibble(twin_dia) %>% 
+    filter(grepl(paste(sprintf("%03d", 1:20), collapse = "|"), run)) %>% 
     rename(heavy = intensity_h, light = intensity_l) %>% 
     gather(label, intensity, heavy, light)
 
@@ -108,9 +107,7 @@ ncol(twin_dia)
 Level of the categorical variable:
 
 ```{r, eval=F}
-levels(twin_dia$pair)
-levels(twin_dia$sample)
-levels(twin_dia$label)
+levels(twin_dia$zygosity)
 ```
 
 `View()` calls the data viewer in RStudio.
