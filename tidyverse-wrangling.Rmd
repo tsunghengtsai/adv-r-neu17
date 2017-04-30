@@ -16,14 +16,6 @@ knitr::opts_chunk$set(message=FALSE, warning=FALSE)
 Efficient data manipulation and transformation in the tidyverse.
 
 
-## Reference
-
-* R for Data Science, Hadley Wickham, Garrett Grolemund
-http://r4ds.had.co.nz/
-
-* RStudio Data Transformation Cheat Sheet
-
-
 ```{r, warning=FALSE, message=FALSE}
 library(tidyverse)
 load("data/adv-R-twin.RData")
@@ -110,7 +102,7 @@ FUN_2( FUN_1(X, Y), Z )
 X %>% FUN_1(Y) %>% FUN_2(Z)
 ```
 
-When your analysis involves multiple processing steps, this makes the processing flow clear.
+When your analysis involves multiple operations, this makes the processing flow clear.
 
 The RStudio keyboard shortcut: Ctrl + Shift + M (Windows), Cmd + Shift + M (Mac).
 
@@ -184,7 +176,7 @@ The `intensity_both` column in `sub3` contains both `intensity_h` and `intensity
 
 ## tidyr
 
-A package that reshapes the layout of datasets.
+A package that helps reshape the layout of datasets.
 
 * Make observations from variables with `tidyr::gather()`.
 
@@ -288,7 +280,7 @@ A package that helps manipulate and transform tabular data.
 
     - Order rows by values of a column with `dplyr::arrange()`.
 
-* Data manipulation and transformation:
+* Data manipulation and transformation for a single dataset:
 
     - Extract existing variables with `dplyr::select()`.
 
@@ -642,7 +634,7 @@ los_all %>% group_by(protein) %>%
 
 ## Applying arbitrary operations to grouped data
 
-`summarise()` with `group_by()` is a great tool to apply the split-apply-combine strategy with **summary functions**. To deal with more complex output objects, however, more general tools are needed. 
+`summarise()` with `group_by()` is a great tool to apply the split-apply-combine strategy with **summary functions**. To work with arbitrary operations, however, more general tools are needed. 
 
 ```{r}
 cor.test(los_all$logsum_dia, los_all$logsum_srm)
@@ -657,24 +649,17 @@ los_all %>% group_by(protein) %>%
 
 ### `group_by()` + `do()`
 
+When the operation `head()` returns multiple rows:
+
 ```{r}
 twin_dia2 %>% 
     group_by(protein) %>% 
     do(head(., 2))
 ```
 
-The pronoun `.` is used as an argument placeholder, on which the function apply.  
+The pronoun `.` is used as an argument placeholder, referring to the group data to be processed. 
 
-```{r, eval=FALSE}
-# When input is not the first argument of a function
-FUN(Y, X)
-X %>% FUN(Y, .)
-
-FUN(Y, Z = X)
-X %>% FUN(Y, Z = .)
-```
-
-If you use named arguments, each argument becomes a list-variable in the output:
+If you use named arguments inside `do()`, it creates a **list-column** in the output:
 
 ```{r}
 twin_dia2 %>% 
@@ -682,14 +667,14 @@ twin_dia2 %>%
     do(top2 = head(., 2))
 ```
 
-A list-variable can contain any arbitrary R object which makes this form of do() useful for storing models:
+The list-column is useful to store arbitrary R objects, such as models.
 
 ```{r}
 los_all %>% group_by(protein) %>% 
     do(fit_cor = cor.test(.$logsum_dia, .$logsum_srm))
 ```
 
-This creates a list-column `fit_cor` to store the fitted models. We can use double bracket `[[]]` to retrieve the model objects:
+It creates a list-column `fit_cor` to store the fitted models. We can use double bracket `[[]]` to retrieve the model objects:
 
 ```{r}
 los_cor <- los_all %>% group_by(protein) %>% 
@@ -697,4 +682,13 @@ los_cor <- los_all %>% group_by(protein) %>%
 los_cor$fit_cor[[1]]
 ```
 
+In the next section, we will learn more techniques to work with list-columns to develop general workflows for both data wrangling and statistical modeling.
 
+
+## Reference
+
+* R for Data Science, Hadley Wickham and Garrett Grolemund
+http://r4ds.had.co.nz/
+
+* RStudio Data Transformation Cheat Sheet
+https://www.rstudio.com/resources/cheatsheets/
