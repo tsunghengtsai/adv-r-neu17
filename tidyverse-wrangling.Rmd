@@ -70,11 +70,11 @@ We will discuss tools in the tidyverse to address the tasks. In particular, how 
 
 ## Helpful conventions for data wrangling
 
-Local data frame `tbl_df()` creates a wrapper of data frame that displays nicely in the console.
+`as_tibble()` creates a wrapper of data frame that displays nicely in the console.
 
 ```{r}
-twin_dia <- tbl_df(twin_dia)
-twin_srm <- tbl_df(twin_srm)
+twin_dia <- as_tibble(twin_dia)
+twin_srm <- as_tibble(twin_srm)
 ```
 
 ```{r}
@@ -128,7 +128,7 @@ Are the input datasets `twin_dia` and `twin_srm` tidy? Let's look at a few examp
 
 ```{r, echo=FALSE}
 # Making untidy data
-td_sub <- tbl_df(twin_srm) %>% select(protein, feature, run, intensity_h, intensity_l) %>% 
+td_sub <- as_tibble(twin_srm) %>% select(protein, feature, run, intensity_h, intensity_l) %>% 
     filter(run %in% c("R001", "R002", "R003"), protein %in% c("APOA", "C1QA"))
 
 sub1a <- td_sub %>% select(-intensity_l) %>% spread(run, intensity_h, convert = F)
@@ -426,12 +426,12 @@ http://r4ds.had.co.nz/
 Consider two datasets `x` and `y`: 
 
 ```{r}
-x <- data_frame(
+x <- tibble(
     key = c(1, 2, 3), 
     val_x = c("x1", "x2", "x3")
 )
 
-y <- data_frame(
+y <- tibble(
     key = c(1, 2, 4), 
     val_y = c("y1", "y2", "y3")
 )
@@ -548,8 +548,7 @@ twin_srm2 <- left_join(twin_srm, med_srm) %>%
 Boxplot of feature log-intensities in each run, before normalization:
 
 ```{r, fig.width=6, fig.height=4, fig.align='center', warning=FALSE, message=FALSE}
-library(stringr)
-twin_dia %>% filter(str_detect(run, str_c(str_pad(1:20, 3, pad = "0"), collapse = "|"))) %>% 
+twin_dia %>% filter(grepl(paste(sprintf("%03d", 1:20), collapse = "|"), run)) %>% 
     ggplot(aes(run, log2inty_h)) + 
     geom_boxplot() + 
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
@@ -558,7 +557,7 @@ twin_dia %>% filter(str_detect(run, str_c(str_pad(1:20, 3, pad = "0"), collapse 
 Boxplot of feature log-intensities in each run, after normalization:
 
 ```{r, fig.width=6, fig.height=4, fig.align='center', warning=FALSE, message=FALSE}
-twin_dia2 %>% filter(str_detect(run, str_c(str_pad(1:20, 3, pad = "0"), collapse = "|"))) %>% 
+twin_dia2 %>% filter(grepl(paste(sprintf("%03d", 1:20), collapse = "|"), run)) %>% 
     ggplot(aes(run, log2inty_h)) + 
     geom_boxplot() + 
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
