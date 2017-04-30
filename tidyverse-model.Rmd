@@ -44,7 +44,7 @@ We will discuss tools to perform modeling/testing in multiple groups through the
 Same as in the previous section:
 
 ```{r}
-twin_dia <- tbl_df(twin_dia) %>% 
+twin_dia <- as_tibble(twin_dia) %>% 
     mutate(
         log2inty_h = log2(intensity_h), 
         log2inty_l = log2(intensity_l)
@@ -99,7 +99,7 @@ coef(summary(fit))
 ```{r}
 fit_coef <- coef(fit)
 
-data_frame(effect = names(fit_coef), estimate = fit_coef) %>% 
+tibble(effect = names(fit_coef), estimate = fit_coef) %>% 
     filter(grepl("run", effect)) %>% 
     mutate(effect = gsub("run", "", effect))
 ```
@@ -125,7 +125,7 @@ for (i in seq_along(prots)) {
     fit <- lm(log2inty_l ~ 0 + run + feature, data = oneprot)  # Fit a linear model
     fit_coef <- coef(fit)  # Extract fitted parameters
     # Assemble the result in a data frame, and combine with those in previous iterations
-    df_oneprot <- data_frame(
+    df_oneprot <- tibble(
         protein = prots[i], 
         effect = names(fit_coef), 
         estimate = fit_coef
@@ -157,7 +157,7 @@ for (i in seq_along(prots)) {
     fit <- lm(log2inty_l ~ 0 + run + feature, data = oneprot)  # Fit a linear model
     fit_coef <- coef(fit)  # Extract fitted parameters
     # Assemble the result in a data frame, and save to the list
-    list_allprot[[i]] <- data_frame(
+    list_allprot[[i]] <- tibble(
         protein = prots[i], 
         effect = names(fit_coef), 
         estimate = fit_coef
