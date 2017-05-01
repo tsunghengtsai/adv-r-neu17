@@ -6,36 +6,34 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-# knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(message=FALSE, warning=FALSE)
+knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-## Learning goal
+# Learning goal
 
 Efficient data manipulation and transformation in the tidyverse.
 
 
 ```{r, warning=FALSE, message=FALSE}
-library(tidyverse)
 load("data/adv-R-twin.RData")
 ```
 
 
-## Example datasets
+# Example datasets
 
 Liu et al., Quantitative variability of 342 plasma proteins in a human twin population, *Molecular Systems Biology*, 2015. [PMID: 25652787]
 
-* 232 MS runs of plasma samples:
+* The dataset contains 232 MS runs of plasma samples:
     - 58 pairs of monozygotic (MZ) and dizygotic (DZ) twins.
     - 2 time points.
     - $58 \times 2 \times 2 = 232$.
 
-* Data acquired with MS workflows of:
+* Data were acquired with MS workflows of:
     - Data independent acquisition (DIA).
     - Selected reaction monitoring (SRM).
 
-* Subset of the original dataset (with `r length(unique(twin_dia$protein))` proteins by DIA and `r length(unique(twin_srm$protein))` proteins by SRM).
+* We will use a subset of the original dataset (with `r length(unique(twin_dia$protein))` proteins by DIA and `r length(unique(twin_srm$protein))` proteins by SRM).
 
 ```{r}
 str(twin_dia)
@@ -59,23 +57,32 @@ head(twin_srm)
 ```
 
 
-## Tasks
+# Tasks for the case study
 
 **Task 1:** normalization of feature intensities, in a way that the median intensity of each run in heavy channel is identical (constant normalization).
 
 **Task 2:** comparison between DIA and SRM datasets, to evaluate their agreement in terms of protein quantification.
 
-We will discuss tools in the tidyverse to address the tasks. In particular, how to tidy data, manipulate and transform data, carry out split-apply-combine approach, and join datasets in a consistent fashion using tidyr and dplyr.
+We will discuss tools in the **tidyverse** to address the tasks. In particular, how to tidy up messy datasets, manipulate and transform data, carry out split-apply-combine approach, and join datasets in a consistent fashion.
 
 
-## Helpful conventions for data wrangling
+```{r}
+library(tidyverse)
+```
 
-`as_tibble()` creates a wrapper of data frame that displays nicely in the console.
+The [tidyverse](http://tidyverse.org/) is a collection of R packages that share common data representation and [design principles](http://tidyverse.tidyverse.org/articles/manifesto.html). It is designed to make data analysis easier. `library(tidyverse)` loads six core packages: ggplot2, tibble, tidyr, readr, purrr, and dplyr. These packages provide functions that are involved in most data analysis projects. We will introduce core functions in **tidyr** and **dplyr**, and touch on a few aspects of tibble, purrr and ggplot2. There are other packages in the tidyverse focusing on different aspects of data analysis that you may find useful. For example, stringr for strings, and broom for model objects that we will also discuss. 
+
+
+# Helpful conventions for data wrangling
+
+`as_tibble()` creates a **tibble** (`tbl_df`) from an existing data frame: 
 
 ```{r}
 twin_dia <- as_tibble(twin_dia)
 twin_srm <- as_tibble(twin_srm)
 ```
+
+Tibbles are special data frames, which have an enhanced print method that shows the content nicely on the console: 
 
 ```{r}
 class(twin_dia)
@@ -102,29 +109,26 @@ FUN_2( FUN_1(X, Y), Z )
 X %>% FUN_1(Y) %>% FUN_2(Z)
 ```
 
-When your analysis involves multiple operations, this makes the processing flow clear.
+When your operation involves a sequence of multiple function calls, this makes the action taken at each step and the whole analysis flow easier to understand. 
 
 The RStudio keyboard shortcut: Ctrl + Shift + M (Windows), Cmd + Shift + M (Mac).
 
 
-## Tidy data
+# Tidy data
 
 In a tidy dataset:
 
 * Each **variable** is saved in its own **column**.
-
 * Each **observation** is saved in its own **row**.
-
 * Each type of observational unit is stored in a single table.
 
-Why tidy data? Tidy data complements R's **vectorized operations**. It is easy to access variables in a tidy dataset, and R will automatically preserve observations as you manipulate variables. 
+Why tidy data? Tidy data complements R's **vectorized operations**. It is easy to access variables in a tidy dataset, and R will automatically preserve observations as you manipulate variables, as shown in [RStudio's Data Import Cheat Sheet](https://github.com/rstudio/cheatsheets/raw/master/source/pdfs/data-import-cheatsheet.pdf):
 
-```{r, out.width=800, echo=FALSE, fig.align='center'}
+```{r, out.width=600, echo=FALSE, fig.align='center'}
 knitr::include_graphics('fig/tidy-why.png')
 ```
 
-Are the input datasets `twin_dia` and `twin_srm` tidy? Let's look at a few examples with values for 2 proteins (APOA, C1QA) and 3 samples (R001, R002, R003) from the SRM dataset.
-
+Are the datasets of the case study `twin_dia` and `twin_srm` tidy? Let's look at a few examples with values for 2 proteins (APOA, C1QA) and 3 samples (R001, R002, R003) from the SRM dataset.
 
 ```{r, echo=FALSE}
 # Making untidy data
@@ -148,17 +152,17 @@ sub1a
 sub1b
 ```
 
-In `sub1a` and `sub1b`, some of the column names (R001, R002, R003) are values of a variable, rather than names of variables.
+In `sub1a` and `sub1b`, some of the column names (R001, R002, R003) are values of a variable, rather than variables.
 
 ```{r}
 sub2
 ```
 
-As for `sub2`, people may have different opinions on whether it is tidy based on the basic unit to be processed in the analysis: 
+As for `sub2`, people may have different opinions on whether it is tidy, based on the basic unit to be processed: 
 
-* It is tidy, if you view *a feature in one channel (light or heavy) in a run* as an observation.
+* It is tidy, if you view *a feature in a channel (light or heavy) in one run* as an observation.
 
-* It is not tidy, if you view *a feature in a run* as an observation, which is scattered across two rows.
+* It is not tidy, if you view *a feature in one run* as an observation, which is scattered across two rows.
 
 We'll take the second view.
 
@@ -172,32 +176,29 @@ sub12
 sub3
 ```
 
-The `intensity_both` column in `sub3` contains both `intensity_h` and `intensity_l` variables.
+The `intensity_both` column in `sub3` contains both `intensity_h` and `intensity_l` variables, and values are saved as strings.
 
-## tidyr
+# tidyr
 
-A package that helps reshape the layout of datasets.
+A package that helps reshape the layout of tabular datasets.
 
-* Make observations from variables with `tidyr::gather()`.
-
-* Make variables from observations with `tidyr::spread()`.
-
+* Gather multiple columns into a key-value pair with `tidyr::gather()`.
+* Spread a key-value pair into multiple columns with `tidyr::spread()`.
 * Split and merge columns with `tidyr::unite()` and `tidyr::separate()`.
 
 
-### Use `gather()` to make observations from variables
+## Use `gather()` to gather multiple columns into a key-value pair
+
+`gather()` moves column names into a **key** column, gathering the column values into a single **value** column.
 
 ```{r}
 sub1a
 ```
 
-Collapse multiple columns into two columns:
-
-1. A **key** column that contains the former column names.
-
-2. A **value** column that contains the former column cells.
+To tidy this dataset, we need to gather the **value**s of feature intensities (in columns `R001`, `R002`, and `R003`) into a single variable `intensity_h`, and create a new variable `run`, a **key** relating the feature to its originating run:
 
 ```{r}
+# gather(sub1a, key = run, value = intensity_h, R001, R002, R003)
 sub1a %>% gather(key = run, value = intensity_h, R001, R002, R003)
 ```
 
@@ -206,24 +207,24 @@ Apply for both `sub1a` and `sub1b` and merge the results:
 ```{r}
 tidy1a <- sub1a %>% gather(key = run, value = intensity_h, R001, R002, R003)
 tidy1b <- sub1b %>% gather(key = run, value = intensity_l, R001, R002, R003)
-left_join(tidy1a, tidy1b)  # merge two parts of the dataset, introduced later 
+dplyr::left_join(tidy1a, tidy1b)  # merge two parts of the dataset, introduced later 
 ```
 
 
-### Use `spread()` to make variables from observations
+## Use `spread()` to spread a key-value pair into multiple columns
+
+`spread()` moves the unique values of a **key** column into the column names, spreading the values of a
+**value** column across the new columns that result.
 
 ```{r}
 sub2
 ```
 
-Generate multiple columns from two columns:
-
-1. Each unique value in the **key** column becomes a column name.
-
-2. Each value in the **value** column becomes a cell in the new columns.
+To tidy this dataset, we need to spread the values of the `intensity` column, into multiple columns named with the unique values of `label` column: 
 
 ```{r}
-(tidy2 <- sub2 %>% spread(key = label, value = intensity))
+# spread(sub2, key = label, value = intensity)
+sub2 %>% spread(key = label, value = intensity)
 ```
 
 In some cases, both `gather()` and `spread()` are needed for data tidying.
@@ -234,15 +235,14 @@ sub12
 
 ```{r}
 sub12 %>% gather(run, intensity, R001, R002, R003)
-tidy12 <- sub12 %>% 
+sub12 %>% 
     gather(run, intensity, R001, R002, R003) %>% 
     spread(key = label, value = intensity) %>% 
-    rename(intensity_h = heavy, intensity_l = light)
-tidy12
+    dplyr::rename(intensity_h = heavy, intensity_l = light)
 ```
 
 
-### Use `separate()` to split a column by a character string separator
+## Use `separate()` to split a column by a string separator
 
 ```{r}
 sub3 %>% separate(col = intensity_both, into = c("intensity_h", "intensity_l"), sep = "/")
@@ -254,50 +254,45 @@ Try to convert to better types using `convert = TRUE`, as in
 sub3 %>% separate(col = intensity_both, into = c("intensity_h", "intensity_l"), sep = "/", convert = TRUE)
 ```
 
+Separate `intensity_both` and `feature` columns:
 
 ```{r}
-tidy12 %>%
+sub3 %>% 
+    separate(col = intensity_both, into = c("intensity_h", "intensity_l"), sep = "/", convert = TRUE) %>%
     separate(col = feature, into = c("peptide", "z1", "fragment", "z3"), sep = "_")
 ```
 
 
-### Use `unite()` to merge columns into a single column
+## Use `unite()` to merge columns into a single column
 
 ```{r}
-tidy12 %>% 
+sub3 %>% 
+    separate(col = intensity_both, into = c("intensity_h", "intensity_l"), sep = "/", convert = TRUE) %>%
     separate(col = feature, into = c("peptide", "z1", "fragment", "z3"), sep = "_") %>% 
     unite(col = transition, z1, fragment, z3, sep = "_")
 ```
 
 
-## dplyr
+# dplyr
 
 A package that helps manipulate and transform tabular data. 
 
 * Reshape a dataset (without changing its content):
-
     - Rename the columns of a data frame with `dplyr::rename()`.
-
-    - Order rows by values of a column with `dplyr::arrange()`.
+    - Order rows by values of columns with `dplyr::arrange()`.
 
 * Data manipulation and transformation for a single dataset:
-
     - Extract existing variables with `dplyr::select()`.
-
     - Extract existing observations with `dplyr::filter()`.
-
-    - Derive new variables with `dplyr::mutate()`.
-
+    - Add new variables with `dplyr::mutate()`.
     - Make grouped summaries with `dplyr::summarise()` and `dplyr::group_by()`.
 
 * Join datasets:
-
     - Mutating joins with `dplyr::left_join()`, `dplyr::right_join()`, `dplyr::inner_join()`, `dplyr::full_join()`.
-
     - Filtering joins `dplyr::semi_join()`, `dplyr::anti_join()`.
 
 
-### Use `rename()` to rename column
+## Use `rename()` to rename columns
 
 ```{r}
 # Rename column intensity_h as inty_H, intensity_l as inty_L
@@ -305,18 +300,18 @@ twin_dia %>% rename(inty_H = intensity_h, inty_L = intensity_l)
 ```
 
 
-### Use `arrange()` to order rows 
+## Use `arrange()` to order rows 
 
 ```{r}
-# Order rows by values of column intensity_l, from low to high
-twin_dia %>% arrange(protein, feature, intensity_l)
+# Order rows by values of columns protein, run, and feature
+twin_dia %>% arrange(protein, run, feature)
 
-# Order rows by values of column intensity_l, from high to low
-twin_dia %>% arrange(protein, feature, desc(intensity_l))
+# Order rows by values of column subject, from high to low
+twin_dia %>% arrange(desc(subject))
 ```
 
 
-### Use `select()` to extract existing variables
+## Use `select()` to extract existing variables
 
 ```{r}
 # Select columns protein and feature
@@ -332,7 +327,8 @@ twin_dia %>% select(feature:intensity_h)
 This is helpful to obtain unique values for particular variables, for example: 
 
 ```{r}
-twin_dia %>% select(protein, feature) %>% 
+twin_dia %>% 
+    select(protein, feature) %>% 
     distinct()
 ```
 
@@ -342,22 +338,21 @@ twin_dia %>% distinct(protein, feature)
 ```
 
 
-### Use `filter()` extract existing observations
+## Use `filter()` to extract existing observations
+
+We select only the last four columns to print the result:
 
 ```{r}
-twin_dia %>% filter(!is.na(intensity_h))
+twin_dia %>% filter(!is.na(intensity_h)) %>% 
+    select(subject:intensity_l)
 
 # Comma as AND operation
-twin_dia %>% filter(!is.na(intensity_h), !is.na(intensity_l))
-```
-
-```{r, eval=FALSE}
-# Same as 
-twin_dia %>% filter(!(is.na(intensity_h) | is.na(intensity_l)))
+twin_dia %>% filter(is.na(intensity_h), !is.na(intensity_l)) %>% 
+    select(subject:intensity_l)
 ```
 
 
-### Use `mutate()` to make new variables
+## Use `mutate()` to add new variables
 
 `mutate()` uses **window functions**, functions that take a vector of values and return another vector of values.
 
@@ -375,11 +370,11 @@ twin_dia %>%
 ```
 
 
-### Use `group_by()` and `summarise()` to make grouped summaries
+## Use `group_by()` and `summarise()` to make grouped summaries
 
-* `summarise()` changes the unit of analysis by using **summary functions**, functions that take a vector of values and return a single value.
+* `summarise()` uses **summary functions**, functions that take a vector of values and return a single value.
 
-* `group_by()` defines the unit of analysis.
+* `group_by()` defines the unit of analysis by adding grouping information that can be recognized by `summarise()`. 
 
 ```{r}
 # Compute mean, sd and median of values in column intensity_l
@@ -402,9 +397,6 @@ twin_dia %>%
     )
 ```
 
-
-### Split-apply-combine approach
-
 `group_by()` + `summarise()` serve as a powerful tool for the split-apply-combine approach. To compute the quantities for constant normalization:
 
 ```{r}
@@ -415,13 +407,12 @@ twin_dia %>% mutate(log2inty_h = log2(intensity_h)) %>%
     mutate(log2inty_adj = median(log2inty_med) - log2inty_med)
 ```
 
-Now, what's left for Task 1 is to merge this summary to the original data frame.
+To address Task 1, we will then need to merge this summary back to the original data frame.
 
 
-## Combine datasets
+# Merge datasets
 
-All the figures in this section are from *R for Data Science* by Hadley Wickham and Garrett Grolemund
-http://r4ds.had.co.nz/
+All the figures in this section are from [R for Data Science](http://r4ds.had.co.nz/) by Hadley Wickham and Garrett Grolemund.
 
 Consider two datasets `x` and `y`: 
 
@@ -442,10 +433,10 @@ knitr::include_graphics('fig/join-setup.png')
 ```
 
 
-### Mutating joins
+## Mutating joins
 
 
-#### Inner join 
+### Inner join 
 
 `inner_join(x, y)`: keep only the observations with equal keys.
 
@@ -453,7 +444,7 @@ knitr::include_graphics('fig/join-setup.png')
 knitr::include_graphics('fig/join-inner.png')
 ```
 
-#### Outer joins 
+### Outer joins 
 
 * `left_join(x, y)`: keep all observations in `x` and merge `y` to it.
 
@@ -466,7 +457,7 @@ knitr::include_graphics('fig/join-outer.png')
 ```
 
 
-### Filtering joins
+## Filtering joins
 
 * `semi_join(x, y)`: keep all observations in `x` that have a match in `y`.
 
@@ -481,12 +472,10 @@ knitr::include_graphics('fig/join-anti.png')
 ```
 
 
-## Task 1: constant normalization
+# Task 1: constant normalization
 
 
-### Split-apply-combine approach to derive the adjustment 
-
-Use `summarise()` with `group_by()`: 
+## Use `summarise()` and `group_by()` to compute the run-level adjustment
 
 ```{r}
 twin_dia <- twin_dia %>% 
@@ -504,7 +493,7 @@ med_dia
 ```
 
 
-### Merge the derived quantities back to the original dataset
+## Merge the adjustment back to the original dataset
 
 ```{r}
 left_join(twin_dia, med_dia)
@@ -543,7 +532,7 @@ twin_srm2 <- left_join(twin_srm, med_srm) %>%
 ```
 
 
-### Visualize the result
+## Visualize the result
 
 Boxplot of feature log-intensities in each run, before normalization:
 
@@ -564,18 +553,18 @@ twin_dia2 %>% filter(grepl(paste(sprintf("%03d", 1:20), collapse = "|"), run)) %
 ```
 
 
-## Task 2: comparison between DIA and SRM datasets
+# Task 2: comparison between DIA and SRM datasets
 
 Evaluate the agreement of protein quantification between DIA and SRM:
 
-* Protein quantification with each dataset using the log of summed feature intensities.
+* Summarize protein abundance with the **log of sum** of feature intensities in both datasets.
 
-* Merge two datasets.
+* Merge the summarized values from the two datasets.
 
 * Evaluate their agreement.
 
 
-### Protein quantification with each dataset
+## Summarization in each dataset
 
 Sum up all the normalized feature intensities (in the light channel) for each protein:
 
@@ -597,7 +586,7 @@ los_srm <- twin_srm2 %>% group_by(run, protein) %>%
 ```
 
 
-### Merge two datasets
+## Merge two datasets
 
 ```{r}
 # Merge results (with proteins quantified in both)
@@ -615,7 +604,7 @@ ggplot(los_all, aes(logsum_dia, logsum_srm)) +
 ```
 
 
-### Evaluate the agreement
+## Evaluate the agreement
 
 Compute the correlation coefficient:
 
@@ -631,9 +620,9 @@ los_all %>% group_by(protein) %>%
 ```
 
 
-## Applying arbitrary operations to grouped data
+# Apply arbitrary operations to grouped data
 
-`summarise()` with `group_by()` is a great tool to apply the split-apply-combine strategy with **summary functions**. To work with arbitrary operations, however, more general tools are needed. 
+The approach with `summarise()` + `group_by()` is limited to the use of **summary functions** that takes a vector of values of returns a summarized value. To work with arbitrary operations, more general tools are required. 
 
 ```{r}
 cor.test(los_all$logsum_dia, los_all$logsum_srm)
@@ -645,10 +634,12 @@ los_all %>% group_by(protein) %>%
     summarise(corres = cor.test(logsum_dia, logsum_srm))
 ```
 
+One way to address this issue is to pass on arbitrary operations to `dplyr::do()`. Note that this approach is slightly out of date, and you may find the **map functions** to be discussed in the next section are more intuitive and easier to work with **list-columns**. 
 
-### `group_by()` + `do()`
 
-When the operation `head()` returns multiple rows:
+## `group_by()` + `do()`
+
+Here the operation `head()` returns multiple rows:
 
 ```{r}
 twin_dia2 %>% 
@@ -658,7 +649,7 @@ twin_dia2 %>%
 
 The pronoun `.` is used as an argument placeholder, referring to the group data to be processed. 
 
-If you use named arguments inside `do()`, it creates a **list-column** in the output:
+If you use a named argument inside `do()`, it creates a **list-column** in the output:
 
 ```{r}
 twin_dia2 %>% 
@@ -673,7 +664,7 @@ los_all %>% group_by(protein) %>%
     do(fit_cor = cor.test(.$logsum_dia, .$logsum_srm))
 ```
 
-It creates a list-column `fit_cor` to store the fitted models. We can use double bracket `[[]]` to retrieve the model objects:
+We can use double brackets `[[]]` to retrieve the model objects from the list-column `fit_cor`:
 
 ```{r}
 los_cor <- los_all %>% group_by(protein) %>% 
@@ -681,13 +672,18 @@ los_cor <- los_all %>% group_by(protein) %>%
 los_cor$fit_cor[[1]]
 ```
 
-In the next section, we will learn more techniques to work with list-columns to develop general workflows for both data wrangling and statistical modeling.
+In the next section, we will learn more techniques to work with list-columns and to develop general workflows for both data wrangling and statistical modeling.
 
 
-## Reference
+# Resources
 
 * R for Data Science, Hadley Wickham and Garrett Grolemund
-http://r4ds.had.co.nz/
+    + http://r4ds.had.co.nz/transform.html
+    + http://r4ds.had.co.nz/tibbles.html
+    + http://r4ds.had.co.nz/tidy-data.html
+    + http://r4ds.had.co.nz/relational-data.html
 
-* RStudio Data Transformation Cheat Sheet
-https://www.rstudio.com/resources/cheatsheets/
+* RStudio Cheat Sheets: 
+    + https://github.com/rstudio/cheatsheets/raw/master/source/pdfs/data-import-cheatsheet.pdf
+    + https://github.com/rstudio/cheatsheets/raw/master/source/pdfs/data-transformation-cheatsheet.pdf
+
