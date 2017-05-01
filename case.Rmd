@@ -29,6 +29,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, warning=FALSE, message=FALSE}
 load("data/adv-R-twin.RData")
+# load("../data/adv-R-twin.RData")
 ```
 
 ```{r, fig.width=8, fig.height=5, echo=FALSE, fig.align='center', warning=FALSE, message=FALSE}
