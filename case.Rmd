@@ -131,7 +131,7 @@ View(twin_dia)
 * **Task 3:** summarization of feature intensities for each protein in every run.
 
 * **Task 4:** fit a linear model to characterize the summarized intensities.
-    
+
 * **Task 5:** group comparison using model-based inference.
 
 While R offers several tools that can be applied for each task, it is crucial to note how they can (or cannot) be integrated into a consistent workflow.
@@ -286,6 +286,15 @@ for (ii in names(medians)) {
 }
 ```
 
+```{r}
+# Check the normalized medians
+head(tapply(twin_dia$log2inty_h, twin_dia$run, median, na.rm = TRUE))
+
+# Back to unnormalized values for Approach 2b
+twin_dia$log2inty_h <- log2(twin_dia$intensity_h)
+twin_dia$log2inty_l <- log2(twin_dia$intensity_l)
+```
+
 
 ## Approach 2b: use a vectorized representation 
 
@@ -300,6 +309,15 @@ medians[c("R001", "R002", "R003", "R001")]
 # Use vectorized representation to normalize the dataset
 twin_dia$log2inty_h <- twin_dia$log2inty_h - medians[twin_dia$run] + gbl_median
 twin_dia$log2inty_l <- twin_dia$log2inty_l - medians[twin_dia$run] + gbl_median
+```
+
+```{r}
+# Check the normalized medians
+head(tapply(twin_dia$log2inty_h, twin_dia$run, median, na.rm = TRUE))
+
+# Back to unnormalized values for Approach 2c
+twin_dia$log2inty_h <- log2(twin_dia$intensity_h)
+twin_dia$log2inty_l <- log2(twin_dia$intensity_l)
 ```
 
 
@@ -318,6 +336,8 @@ head(twin_dia2)
 
 twin_dia2$log2inty_h <- twin_dia2$log2inty_h - twin_dia2$run_median + gbl_median
 twin_dia2$log2inty_l <- twin_dia2$log2inty_l - twin_dia2$run_median + gbl_median
+
+head(tapply(twin_dia2$log2inty_h, twin_dia2$run, median, na.rm = TRUE))
 ```
 
 
@@ -327,8 +347,8 @@ For each **protein** and each **run**, compute the **log of the sum** of the nor
 
 ```{r}
 # Transform the normalized log-intensities back to the original scale
-twin_dia$intensity_h <- 2 ^ (twin_dia$log2inty_h)
-twin_dia$intensity_l <- 2 ^ (twin_dia$log2inty_l)
+twin_dia2$intensity_h <- 2 ^ (twin_dia2$log2inty_h)
+twin_dia2$intensity_l <- 2 ^ (twin_dia2$log2inty_l)
 ```
 
 
@@ -344,8 +364,8 @@ Use `tapply()` with grouping variables defined in a **list**:
 ```{r}
 # Approach 3b
 sum_t <- tapply(
-    twin_dia$intensity_l, 
-    list(run = twin_dia$run, protein = twin_dia$protein), 
+    twin_dia2$intensity_l, 
+    list(run = twin_dia2$run, protein = twin_dia2$protein), 
     function(x) log2(sum(x, na.rm = TRUE))
 )
 head(sum_t)
@@ -357,8 +377,8 @@ head(sum_t)
 ```{r}
 # Approach 3c
 sum_g <- aggregate(
-    twin_dia$intensity_l,
-    list(run = twin_dia$run, protein = twin_dia$protein),
+    twin_dia2$intensity_l,
+    list(run = twin_dia2$run, protein = twin_dia2$protein),
     function(x) log2(sum(x, na.rm = TRUE))
 )
 head(sum_g)
@@ -366,9 +386,9 @@ head(sum_g)
 
 ```{r, eval=FALSE}
 # Alternatively, use a formula representation
-aggregate(
+sum_g <- aggregate(
     intensity_l ~ run + protein, 
-    data = twin_dia, 
+    data = twin_dia2, 
     function(x) log2(sum(x, na.rm = TRUE))
 )
 ```
