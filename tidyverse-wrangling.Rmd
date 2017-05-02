@@ -122,11 +122,7 @@ In a tidy dataset:
 * Each **observation** is saved in its own **row**.
 * Each type of observational unit is stored in a single table.
 
-Why tidy data? Tidy data complements R's **vectorized operations**. It is easy to access variables in a tidy dataset, and R will automatically preserve observations as you manipulate variables, as shown in [RStudio's Data Import Cheat Sheet](https://github.com/rstudio/cheatsheets/raw/master/source/pdfs/data-import-cheatsheet.pdf):
-
-```{r, out.width=600, echo=FALSE, fig.align='center'}
-knitr::include_graphics('fig/tidy-why.png')
-```
+Why tidy data? Tidy data complements R's **vectorized operations**. It is easy to access variables in a tidy dataset, and R will automatically preserve observations as you manipulate variables.
 
 Are the datasets of the case study `twin_dia` and `twin_srm` tidy? Let's look at a few examples with values for 2 proteins (APOA, C1QA) and 3 samples (R001, R002, R003) from the SRM dataset.
 
@@ -429,7 +425,7 @@ y <- tibble(
 ```
 
 ```{r, out.width=200, echo=FALSE, fig.align='center'}
-knitr::include_graphics('fig/join-setup.png')
+knitr::include_graphics("http://r4ds.had.co.nz/diagrams/join-setup.png")
 ```
 
 
@@ -441,7 +437,7 @@ knitr::include_graphics('fig/join-setup.png')
 `inner_join(x, y)`: keep only the observations with equal keys.
 
 ```{r, out.width=500, echo=FALSE, fig.align='center'}
-knitr::include_graphics('fig/join-inner.png')
+knitr::include_graphics("http://r4ds.had.co.nz/diagrams/join-inner.png")
 ```
 
 ### Outer joins 
@@ -453,7 +449,7 @@ knitr::include_graphics('fig/join-inner.png')
 * `full_join(x, y)`: keep all observations in `x` and `y`.
 
 ```{r, out.width=500, echo=FALSE, fig.align='center'}
-knitr::include_graphics('fig/join-outer.png')
+knitr::include_graphics("http://r4ds.had.co.nz/diagrams/join-outer.png")
 ```
 
 
@@ -464,11 +460,11 @@ knitr::include_graphics('fig/join-outer.png')
 * `anti_join(x, y)`: drops all observations in `x` that have a match in `y`.
 
 ```{r, out.width=500, echo=FALSE, fig.align='center'}
-knitr::include_graphics('fig/join-semi.png')
+knitr::include_graphics("http://r4ds.had.co.nz/diagrams/join-semi.png")
 ```
 
 ```{r, out.width=500, echo=FALSE, fig.align='center'}
-knitr::include_graphics('fig/join-anti.png')
+knitr::include_graphics("http://r4ds.had.co.nz/diagrams/join-anti.png")
 ```
 
 
